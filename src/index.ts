@@ -22,6 +22,21 @@ import {
   VeewerModelList,
 } from "./client.js";
 
+// En dusuk desteklenen Node surumu. Sinir `fetch`'in globale girdigi yer: 18'den once client
+// her cagrida "fetch is not defined" ile patliyor -- ama sunucu sorunsuz aciliyor ve tool'lari
+// listeliyor, yani istemcide "araclar goruluyor, hicbiri calismiyor" gibi gorunuyor. package.json
+// `engines` alani bunu ENGELLEMEZ, npm yalnizca uyari basar; o yuzden kontrol burada.
+const MINIMUM_NODE_MAJOR = 18;
+
+const nodeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
+if (Number.isFinite(nodeMajor) && nodeMajor < MINIMUM_NODE_MAJOR) {
+  process.stderr.write(
+    `VEEWER MCP needs Node.js ${MINIMUM_NODE_MAJOR} or newer, but this one is ${process.versions.node}. ` +
+      "Update Node (20 LTS or newer is recommended) and start the server again.\n",
+  );
+  process.exit(1);
+}
+
 const apiKey = process.env.VEEWER_API_KEY;
 if (!apiKey) {
   // stderr'e yaziliyor: stdout MCP protokolunun kendisi, oraya yazilan her sey istemcinin

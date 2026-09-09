@@ -25,6 +25,10 @@ Versioning rules for this repository:
 - API key authentication through the `VEEWER_API_KEY` environment variable, sent as the
   `x-api-key` header. `VEEWER_API_URL` overrides the base URL for testing against a non-production
   VEEWER instance.
+- A Node.js version check at startup: the server needs Node 18 or newer for `fetch`, and on an
+  older runtime it used to start, list its tools and then fail every call with
+  `fetch is not defined`. `engines` in package.json does not prevent this — npm only warns — so
+  the check refuses to start and names the version it found.
 - Errors are reported with the message the API returned, so a revoked key or an unknown model
   reads as what it is rather than as a status code. A rate-limited request is reported as such.
 

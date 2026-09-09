@@ -6,6 +6,9 @@ the site.
 
 Read-only by design: it can list and read, never upload, rename or delete.
 
+Needs **Node.js 18 or newer** (20 LTS or newer recommended). On an older Node the server starts
+but every call fails, so it refuses to start instead and says why.
+
 ## Setup
 
 **1. Create an API key** at [veewer.com/api-keys](https://veewer.com/api-keys). It is shown once,
