@@ -1,13 +1,13 @@
 {
   "name": "@veewer/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for VEEWER — read your 3D models, folders and embed codes from any AI assistant.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "veewer-mcp": "dist/index.js"
+    "veewer-mcp": "dist/stdio.js"
   },
-  "main": "dist/index.js",
+  "main": "dist/stdio.js",
   "files": [
     "dist",
     "README.md"
@@ -17,7 +17,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/http.js",
+    "start:stdio": "node dist/stdio.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

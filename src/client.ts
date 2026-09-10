@@ -8,6 +8,40 @@
 
 const DEFAULT_BASE_URL = "https://server.veewer.com/api/v1/public";
 
+/**
+ * The lowest supported Node version. The line is where `fetch` became global: before 18 every
+ * call below fails with "fetch is not defined" -- but the server starts fine and lists its tools,
+ * so it looks like "the tools are there and none of them work". The package.json `engines` field
+ * does NOT prevent this, npm only prints a warning.
+ *
+ * The check lives here rather than in an entry point because this is the file that has the
+ * constraint, and there are now two entry points that would each have to remember it.
+ */
+const MINIMUM_NODE_MAJOR = 18;
+
+/**
+ * The complaint to print when the runtime is too old, or null when it is fine. This reports
+ * rather than exits: killing the process is an entry point's decision, and a module that other
+ * code merely imports must not be able to take the process down.
+ */
+export function unsupportedNodeMessage(): string | null {
+  const major = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
+  if (!Number.isFinite(major) || major >= MINIMUM_NODE_MAJOR) return null;
+
+  return (
+    `VEEWER MCP needs Node.js ${MINIMUM_NODE_MAJOR} or newer, but this one is ${process.versions.node}. ` +
+    "Update Node (20 LTS or newer is recommended) and start the server again."
+  );
+}
+
+/**
+ * How long to wait for the VEEWER API before giving up. Without a deadline a stalled backend
+ * holds the request open until whatever sits in front of the server cuts it -- around 230 seconds
+ * on Azure App Service -- and on a small instance those held requests are the scarcest resource
+ * there is. This is a client-side resource decision, not a copy of any backend rule.
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export class VeewerApiError extends Error {
   constructor(
     message: string,
@@ -43,12 +77,25 @@ export class VeewerClient {
       }
     }
 
-    const response = await fetch(url, {
-      headers: {
-        "x-api-key": this.apiKey,
-        accept: "application/json",
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "x-api-key": this.apiKey,
+          accept: "application/json",
+        },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw new VeewerApiError(
+          `VEEWER did not answer within ${REQUEST_TIMEOUT_MS / 1000} seconds. Try again.`,
+          504,
+        );
+      }
+
+      throw error;
+    }
 
     if (!response.ok) {
       // Sunucunun mesaji varsa o gosteriliyor: "401" demek yerine "anahtar iptal edilmis"
@@ -63,11 +110,18 @@ export class VeewerClient {
         // Govde JSON degilse ham metin kullanilir.
       }
 
-      if (response.status === 429) {
-        message = "Rate limit reached for this API key. Wait a minute and try again.";
+      if (!message) {
+        // Only when the API said nothing. A 429 gets named because a bare status reads as a
+        // fault, but no waiting time is quoted: there are two windows per key and another per
+        // IP, they live in the backend's configuration, and a number guessed here would be
+        // wrong the day one of them changes.
+        message =
+          response.status === 429
+            ? "Rate limit reached for this API key."
+            : `Request failed with status ${response.status}`;
       }
 
-      throw new VeewerApiError(message || `Request failed with status ${response.status}`, response.status);
+      throw new VeewerApiError(message, response.status);
     }
 
     return (await response.json()) as T;

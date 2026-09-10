@@ -48,12 +48,40 @@ for the armchair model"*.
 
 ## Configuration
 
-| Variable | Required | Default |
-| --- | --- | --- |
-| `VEEWER_API_KEY` | yes | — |
-| `VEEWER_API_URL` | no | `https://server.veewer.com/api/v1/public` |
+| Variable | Required | Default | Used by |
+| --- | --- | --- | --- |
+| `VEEWER_API_KEY` | yes | — | stdio only |
+| `VEEWER_API_URL` | no | `https://server.veewer.com/api/v1/public` | both |
+| `PORT` | no | `3000` | hosted only |
 
 `VEEWER_API_URL` only exists for testing against a non-production VEEWER instance.
+
+## Running it as a hosted server
+
+The package ships a second entry point that speaks MCP over HTTP instead of stdio, for hosting one
+shared server rather than asking every user to run their own:
+
+```bash
+npm run build
+PORT=3000 npm start        # POST /mcp, plus GET /health
+```
+
+The difference that shapes everything else: **the hosted server takes the API key from each
+request**, in the `x-api-key` header, so one instance serves every account and each caller only
+ever sees their own models. `VEEWER_API_KEY` is not used here — a key in the environment would be
+one account's key for everybody.
+
+The key goes in `x-api-key` and nowhere else. `Authorization: Bearer` is not accepted: the VEEWER
+API refuses it too, and that header is reserved for the OAuth access token that a later version
+will use.
+
+It is stateless: every call is a self-contained `POST /mcp` that answers with a JSON body, with no
+session and no long-lived stream, so it can be restarted or scaled without dropping anyone.
+`GET /health` is unauthenticated and returns the version and uptime.
+
+No CORS headers are sent, deliberately: an API key kept in browser JavaScript is readable by
+anyone who opens the page, so this is a server-to-server endpoint. A browser failing to read the
+response is the intended behaviour.
 
 ## Under the hood
 
@@ -61,15 +89,17 @@ This package is a thin client over the VEEWER public API — the same key works 
 sent in the `x-api-key` header. The API reference is at
 [server.veewer.com/api/v1/public/docs](https://server.veewer.com/api/v1/public/docs).
 
-Requests are rate limited per key (60 per minute, 1000 per hour). Exceeding it returns a clear
-message rather than a bare error.
+Requests are rate limited per key, and the limits belong to the API rather than to this package —
+they are listed in the reference above, and a request that exceeds one is reported with the
+message the API itself returned.
 
 ## Development
 
 ```bash
 npm install
 npm run build
-VEEWER_API_KEY=vwr_... node dist/index.js   # speaks MCP over stdio
+VEEWER_API_KEY=vwr_... npm run start:stdio   # speaks MCP over stdio
+PORT=3000 npm start                          # speaks MCP over HTTP
 ```
 
 ## Publishing

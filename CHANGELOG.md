@@ -14,6 +14,69 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-10
+
+### Added
+
+- A second entry point, `dist/http.js`, that speaks the MCP Streamable HTTP transport, so the
+  server can be hosted once for everybody instead of being run by each user. `npm start` runs it;
+  `npm run start:stdio` runs the original.
+- `PORT` (default 3000) and the endpoints `POST /mcp` and `GET /health`.
+
+### Changed
+
+- The tools moved out of the entry point into `tools.ts`, and the server is now built by a factory
+  that takes the client. Both entry points build from it, so the two transports cannot end up
+  offering different tools.
+- `src/index.ts` became `src/stdio.ts`, and `bin`/`main` point at `dist/stdio.js`. "index" read as
+  the package's main thing and hid the fact that it is one of two transports.
+- Calls to the VEEWER API now time out after 30 seconds. Without a deadline a stalled backend
+  holds a request until whatever sits in front of the server cuts it, and on a small instance
+  those held requests are the scarcest resource there is.
+- A 429 is no longer rewritten as "wait a minute": there are two windows per key and another per
+  IP, all of them the backend's to define, so the API's own message is passed through. The README
+  no longer quotes the numbers either.
+- The Node version check moved into `client.ts`, the file that actually needs `fetch`, and now
+  returns a message instead of calling `process.exit` — ending the process is an entry point's
+  decision, not a library module's.
+
+### Fixed
+
+- **An aborted request used to leak its server, transport and the caller's API key for the life
+  of the process.** In JSON-response mode the SDK settles its promise only when the reply is
+  written, so a caller that disappears first — a cancelled tool call, a client shutting down, the
+  platform cutting a slow request — left the handler suspended forever, holding all three in
+  memory. The wait now ends on whichever comes first, disconnect or reply, and the cleanup runs in
+  `finally`. Verified with 600 aborted mid-flight calls against an upstream that never answers:
+  memory returns to its baseline instead of growing.
+- A tool failure is a successful JSON-RPC response, so the hosted access log read `200` through
+  an outage. Tool errors are now reported to the entry point and logged.
+- Shutdown closed idle keep-alive connections nowhere, so `close()` could not finish inside the
+  platform's stop window and every restart ended in a kill.
+- `keepAliveTimeout` is raised above the platform front end's idle window, which is the
+  proxy-reuse race that shows up as sporadic 502s with nothing in the application log.
+- A malformed `PORT` bound a random port and the health probe then never connected; it now falls
+  back to 3000.
+- An error after the headers were sent left the response open until something timed it out.
+- An oversized body was reported as a JSON parse error, which it is not.
+
+### Notes
+
+- The hosted server reads the API key **per request** (`x-api-key` only) and builds a server and
+  client for that request alone. A shared instance would hold the first caller's key and serve
+  their models to everyone after them. `Authorization: Bearer` is deliberately not accepted: the
+  backend refuses it as well, because its JWT scheme claims that header, and it is where the
+  OAuth access token will arrive.
+- It is stateless (`sessionIdGenerator: undefined`) and replies with a JSON body rather than an
+  SSE stream (`enableJsonResponse: true`). Both follow from where it runs: Azure App Service
+  closes an idle connection at around 230 seconds, and held-open streams are the scarcest
+  resource on a small shared plan. Nothing is lost, because every tool is a read and the server
+  never sends anything unasked.
+- No CORS headers are sent, matching the backend's decision for the public API: a key held in
+  browser JavaScript is public, so this endpoint is server-to-server.
+- Authorization is still the API key. OAuth 2.1 with protected-resource metadata, which is what
+  the connector directories require, is deliberately not part of this release.
+
 ## [0.1.0] - 2026-09-09
 
 ### Added
@@ -37,5 +100,6 @@ Versioning rules for this repository:
 - Upload, rename and delete are deliberately absent in this version: uploading spends account
   credits and deleting cannot be undone, neither of which belongs in an agent's hands yet.
 
-[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/codeo-engineering/veewer-mcp/releases/tag/v0.1.0
