@@ -32,7 +32,7 @@ export interface OAuthConfig {
  * Reads the configuration from the environment. `resource` is the URL users type into their
  * client, path included -- Claude requires the metadata's `resource` to match it exactly.
  */
-export function readOAuthConfig(env: NodeJS.ProcessEnv): OAuthConfig | null {
+export function readOAuthConfig(env: NodeJS.ProcessEnv, mcpPath: string): OAuthConfig | null {
   const issuer = env.VEEWER_OAUTH_ISSUER?.trim().replace(/\/+$/, "");
   if (!issuer) return null;
 
@@ -51,6 +51,15 @@ export function readOAuthConfig(env: NodeJS.ProcessEnv): OAuthConfig | null {
     if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") {
       throw new Error(`${name} must be https: ${value}`);
     }
+  }
+
+  // The resource is what users type into their client, and Claude compares the metadata's
+  // `resource` to it literally. This server answers on one path only, so a value with any other
+  // path (or a query/fragment, which the spec rules out of a canonical URI) would publish a
+  // document nothing can match -- and the failure shows up in the client, never in our log.
+  const resourceUrl = new URL(resource);
+  if (resourceUrl.pathname !== mcpPath || resourceUrl.search || resourceUrl.hash) {
+    throw new Error(`MCP_PUBLIC_URL must end in ${mcpPath} with no query or fragment: ${resource}`);
   }
 
   return { issuer, resource };
@@ -91,6 +100,14 @@ export function challengeHeader(config: OAuthConfig, error?: "invalid_token"): s
   return `Bearer ${parts.join(", ")}`;
 }
 
+/**
+ * Two ways a token fails, and they must not be confused: `invalid` is the caller's problem (401,
+ * sign in again); `unavailable` is ours -- the key set could not be fetched -- and answering it
+ * with 401 would sign every OAuth user out during a backend blip, since Claude treats
+ * `invalid_token` as "get a new token" and would fail that against the same backend.
+ */
+export type VerifyResult = { payload: JWTPayload } | { error: "invalid" | "unavailable" };
+
 export class TokenVerifier {
   private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
 
@@ -100,14 +117,14 @@ export class TokenVerifier {
       // of forged `kid`s must not turn into a flood of requests at the backend.
       cooldownDuration: 30_000,
       cacheMaxAge: 60 * 60 * 1000,
+      // Well under Claude's own budget for us; a slow backend must surface as "unavailable" here
+      // rather than as a client-side timeout that looks like the MCP server hanging.
+      timeoutDuration: 5_000,
     });
   }
 
-  /**
-   * Returns the payload of a valid token, or null. Every refusal is a 401 upstream; the reason
-   * goes to the log, never to the caller (a forger learns nothing from "wrong audience").
-   */
-  async verify(token: string): Promise<JWTPayload | null> {
+  /** The reason goes to the log, never to the caller: a forger learns nothing from "wrong audience". */
+  async verify(token: string): Promise<VerifyResult> {
     try {
       const { payload } = await jwtVerify(token, this.jwks, {
         issuer: this.config.issuer,
@@ -118,13 +135,22 @@ export class TokenVerifier {
 
       if (payload.purpose !== "mcp" || typeof payload.uid !== "string" || !payload.uid) {
         console.error("bearer refused: not an MCP access token");
-        return null;
+        return { error: "invalid" };
       }
 
-      return payload;
+      return { payload };
     } catch (error) {
-      console.error(`bearer refused: ${error instanceof Error ? error.message : String(error)}`);
-      return null;
+      const code = (error as { code?: unknown })?.code;
+      // jose's own verdicts on the token are `ERR_JWT_*` / `ERR_JWS_*` / `ERR_JWKS_NO_MATCHING_KEY`;
+      // everything else (fetch failed, timeout, non-200, unparsable key set) is the key set not
+      // being reachable, which is not the caller's fault.
+      const tokenFault =
+        typeof code === "string" &&
+        (code.startsWith("ERR_JWT_") || code.startsWith("ERR_JWS_") || code === "ERR_JWKS_NO_MATCHING_KEY" || code === "ERR_JWKS_MULTIPLE_MATCHING_KEYS");
+
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`bearer ${tokenFault ? "refused" : "not verifiable, key set unreachable"}: ${message}`);
+      return { error: tokenFault ? "invalid" : "unavailable" };
     }
   }
 }

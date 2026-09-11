@@ -40,6 +40,8 @@ writing them, precisely so the shared layer stays silent for the transport that 
 | `VEEWER_API_KEY` | yes | — | stdio only |
 | `VEEWER_API_URL` | no | `https://server.veewer.com/api/v1/public` | both |
 | `PORT` | no | `3000` | HTTP only |
+| `VEEWER_OAUTH_ISSUER` | no | — (OAuth off) | HTTP only |
+| `MCP_PUBLIC_URL` | with the issuer | — (must end in `/mcp`) | HTTP only |
 
 ## Layout
 
@@ -47,7 +49,8 @@ writing them, precisely so the shared layer stays silent for the transport that 
 src/client.ts   # HTTP client, the response types the API returns, the Node version check
 src/tools.ts    # the eight tools and the server factory -- shared by both entry points
 src/stdio.ts    # stdio entry point: one account, key from the environment (bin/main point here)
-src/http.ts     # HTTP entry point: many accounts, key from each request
+src/http.ts     # HTTP entry point: many accounts, credential from each request
+src/oauth.ts    # OAuth resource-server side: metadata, challenge header, JWKS token verification
 ```
 
 `client.ts` performs no interpretation: it sends the key, and on a non-2xx response it surfaces the
@@ -190,21 +193,22 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   it travels in a header precisely so it cannot end up in a logged URL. The hosted server writes
   one log line per request — method, path, JSON-RPC method, status, duration — and deliberately no
   key, no account and no tool arguments, since a search term is the user's data.
-- **stdout is the protocol** under stdio. A stray `console.log` in `index.ts` or `tools.ts` breaks
+- **stdout is the protocol** under stdio. A stray `console.log` in `stdio.ts` or `tools.ts` breaks
   every client. `http.ts` is the exception, and only because nothing reads its stdout as protocol.
 - The hosted server sends **no CORS headers**, matching `[DisableCors]` on the backend's public
   API. A key held in browser JavaScript is public; a browser being unable to read the response is
   the point, not a defect.
-- **The key goes in `x-api-key` and nowhere else.** Accepting `Authorization: Bearer` looks like a
-  free courtesy and is not: the backend refuses that header on purpose (its JWT scheme's
-  `OnMessageReceived` claims it), so we would be accepting a shape our own API rejects, and it is
-  where the OAuth access token will arrive — at which point a key and a token would be
-  indistinguishable in the same header.
-- Authorization is the API key alone. **OAuth 2.1 with protected-resource metadata is not
-  implemented**, and it is what the connector directories require — that is the next piece of
-  work on the hosted path, not an oversight. When it lands, `sendError` will need to carry a
-  `WWW-Authenticate` header and the router will need `.well-known` paths that are anonymous; both
-  are small today and neither has been pre-built.
+- **The key goes in `x-api-key` and nowhere else; `Authorization: Bearer` carries only the OAuth
+  access token** (23002-1140). The backend tells the two credentials apart by header, and a key
+  sent as a bearer is verified as a JWT and refused. When both arrive, the key wins.
+- **A JWKS fetch failure is 503, never 401.** `TokenVerifier` separates jose's verdicts on the
+  token (`ERR_JWT_*`, `ERR_JWS_*`, no matching key → 401 `invalid_token`) from the key set being
+  unreachable (fetch failed, timeout, non-200 → 503 + `Retry-After`, no challenge header). jose
+  does not fall back to a stale key set once `cacheMaxAge` (1 h) has passed, so a backend blip
+  answered with 401 would have signed every OAuth user out. Ops rule that follows from local
+  verification: after rotating `OAuth:SigningKeyPem` on the backend, restart this app (or have
+  the backend publish both keys for an hour) — otherwise old-key tokens verify here for up to an
+  hour and are refused upstream as a 200 tool error, which does not make Claude re-authenticate.
 - The API client has a **30 second deadline** on every call. It is a resource decision, not a
   backend rule: without it a stalled backend holds a hosted request until the platform cuts it.
 - The repository is **private** while all repositories in the `codeo-engineering` organization are;

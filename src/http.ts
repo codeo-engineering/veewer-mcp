@@ -2,7 +2,7 @@
 /**
  * VEEWER MCP server, hosted over HTTP (23002-1127).
  *
- * The stdio entry point (`index.ts`) runs on one person's machine and serves one account. This
+ * The stdio entry point (`stdio.ts`) runs on one person's machine and serves one account. This
  * one runs on our own host and serves everybody, so the two differ in exactly one thing that
  * then decides the whole shape of the file: **the API key arrives with each request, not at
  * startup**.
@@ -50,7 +50,7 @@ const HEALTH_PATH = "/health";
  */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-/** JSON-RPC reserves -32000..-32099 for implementation-defined errors; this one means "no key". */
+/** JSON-RPC reserves -32000..-32099 for implementation-defined errors; this one means "no usable credential" (no key, or a bad bearer). */
 const UNAUTHORIZED_CODE = -32001;
 
 // A bad PORT must not be papered over: `listen(NaN)` binds a random free port, the host's probe
@@ -64,19 +64,13 @@ const baseUrl = process.env.VEEWER_API_URL;
  * challenge must not be advertised against a backend that has OAuth switched off. Read at
  * startup so a malformed value stops the process here, not on the first caller.
  */
-const oauth = readOAuthConfig(process.env);
+const oauth = readOAuthConfig(process.env, MCP_PATH);
 const verifier = oauth ? new TokenVerifier(oauth) : null;
 
 /**
- * The key travels in `x-api-key`, and ONLY there.
- *
- * `Authorization: Bearer` is deliberately not accepted, for two reasons that point the same way.
- * The backend refuses it on purpose (see `ApiKeyAuthenticationOptions`: the JwtBearer scheme's
- * `OnMessageReceived` claims that header for its own tokens), so accepting it here would mean
- * this server accepting a credential shape its own API rejects. And Bearer is where the OAuth
- * access token will arrive when OAuth is added -- spending the header now on a different kind of
- * secret would mean unpicking it later, with a period in between where an OAuth token is
- * mistaken for a key and rejected as an unknown one.
+ * The key travels in `x-api-key`, and ONLY there. `Authorization: Bearer` carries the OAuth
+ * access token (23002-1140) and never a key: the backend tells the two credentials apart by
+ * header, and an API key sent as a bearer would be verified as a JWT and refused.
  */
 function readApiKey(req: IncomingMessage): string | undefined {
   const header = req.headers["x-api-key"];
@@ -198,8 +192,18 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse, log: Request
     // Verified HERE, before anything is forwarded: the spec forbids passing on a token that was
     // not issued for this server, and the backend would refuse it anyway -- but a 401 from
     // upstream would come back as a tool error, not as the challenge the client needs.
-    const payload = await verifier.verify(bearer);
-    if (!payload) {
+    const verdict = await verifier.verify(bearer);
+    if ("error" in verdict) {
+      if (verdict.error === "unavailable") {
+        // Our fault, not the caller's: no challenge header (it would make the client throw its
+        // token away), a status that says "try again", and a hint of when.
+        if (!res.headersSent) {
+          res.writeHead(503, { "content-type": "application/json", "retry-after": "10" });
+          res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32603, message: "VEEWER's sign-in service is not reachable right now. Try again in a moment." }, id: null }));
+        }
+        return;
+      }
+
       sendUnauthorized(res, "invalid_token", "The access token is invalid or has expired. Sign in again.");
       return;
     }

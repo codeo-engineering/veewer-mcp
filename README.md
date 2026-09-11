@@ -92,7 +92,7 @@ header.
 OAuth is switched on by two environment variables: `VEEWER_OAUTH_ISSUER` (the VEEWER backend
 origin that issues tokens, e.g. `https://server.veewer.com`) and `MCP_PUBLIC_URL` (this server's
 public URL exactly as users type it, e.g. `https://mcp.veewer.com/mcp`). With them set the server
-serves `/.well-known/oauth-protected-resource`, answers unauthenticated calls with a `401` that
+serves `/.well-known/oauth-protected-resource/mcp` (and the root form), answers unauthenticated calls with a `401` that
 names it, and verifies bearer tokens against the issuer's JWKS. Without them it is API-key only.
 
 It is stateless: every call is a self-contained `POST /mcp` that answers with a JSON body, with no
