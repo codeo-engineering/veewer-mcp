@@ -14,11 +14,22 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-11
+
 ### Added
 
+- OAuth 2.1 sign-in for the hosted server: with `VEEWER_OAUTH_ISSUER` and `MCP_PUBLIC_URL` set it
+  serves protected resource metadata, challenges unauthenticated calls with a `401` +
+  `WWW-Authenticate`, verifies bearer tokens against the issuer's JWKS (audience-bound) and
+  forwards them to the VEEWER API. API keys keep working. Needs backend 23002-1140.
+- Tool annotations (`readOnlyHint` etc.) on all eight tools.
 - The hosted server is live at `https://mcp.veewer.com/mcp` (Azure App Service Linux B1, East
   US; DNS-only in Cloudflare with an App Service managed certificate). README and the repository
   guide describe the deploy and the domain setup.
+
+### Changed
+
+- `VeewerClient` takes either `apiKey` or `accessToken`; new dependency `jose`.
 
 ## [0.3.0] - 2026-09-11
 
@@ -124,7 +135,8 @@ Versioning rules for this repository:
 - Upload, rename and delete are deliberately absent in this version: uploading spends account
   credits and deleting cannot be undone, neither of which belongs in an agent's hands yet.
 
-[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.1.0...v0.2.0

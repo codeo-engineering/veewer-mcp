@@ -30,7 +30,8 @@
  */
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { unsupportedNodeMessage, VeewerClient } from "./client.js";
+import { unsupportedNodeMessage, VeewerClient, type VeewerClientOptions } from "./client.js";
+import { challengeHeader, metadataPaths, protectedResourceMetadata, readOAuthConfig, TokenVerifier } from "./oauth.js";
 import { createVeewerServer, SERVER_VERSION } from "./tools.js";
 
 const nodeComplaint = unsupportedNodeMessage();
@@ -59,6 +60,14 @@ const port = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 3000;
 const baseUrl = process.env.VEEWER_API_URL;
 
 /**
+ * OAuth (23002-1140) is on only when VEEWER_OAUTH_ISSUER is set -- see oauth.ts for why the
+ * challenge must not be advertised against a backend that has OAuth switched off. Read at
+ * startup so a malformed value stops the process here, not on the first caller.
+ */
+const oauth = readOAuthConfig(process.env);
+const verifier = oauth ? new TokenVerifier(oauth) : null;
+
+/**
  * The key travels in `x-api-key`, and ONLY there.
  *
  * `Authorization: Bearer` is deliberately not accepted, for two reasons that point the same way.
@@ -72,6 +81,32 @@ const baseUrl = process.env.VEEWER_API_URL;
 function readApiKey(req: IncomingMessage): string | undefined {
   const header = req.headers["x-api-key"];
   return (Array.isArray(header) ? header[0] : header)?.trim() || undefined;
+}
+
+/** The OAuth access token, from `Authorization: Bearer` and nowhere else (never the query string). */
+function readBearer(req: IncomingMessage): string | undefined {
+  const header = req.headers.authorization;
+  if (!header || !/^bearer\s+/i.test(header)) return undefined;
+  return header.replace(/^bearer\s+/i, "").trim() || undefined;
+}
+
+/**
+ * The transport-level refusal that makes a client start (or redo) the OAuth flow. Claude acts
+ * only on a real 401 with this header -- a 200 carrying a tool error is shown to the model as
+ * text and nothing happens. Without OAuth configured the header is omitted and the body says
+ * where to get a key, exactly as before.
+ */
+function sendUnauthorized(res: ServerResponse, error: "invalid_token" | undefined, message: string): void {
+  if (res.headersSent) {
+    res.end();
+    return;
+  }
+
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (oauth) headers["www-authenticate"] = challengeHeader(oauth, error);
+
+  res.writeHead(401, headers);
+  res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: UNAUTHORIZED_CODE, message }, id: null }));
 }
 
 class BodyError extends Error {
@@ -150,15 +185,35 @@ function methodOf(body: unknown): string {
 }
 
 async function handleMcp(req: IncomingMessage, res: ServerResponse, log: RequestLog): Promise<void> {
+  // Two credentials, one per request: an API key in x-api-key, or an OAuth access token in
+  // Authorization: Bearer. The key wins when both are present -- it is the older, explicit
+  // choice -- and a bearer is only looked at when OAuth is configured.
   const apiKey = readApiKey(req);
-  if (!apiKey) {
+  const bearer = apiKey ? undefined : readBearer(req);
+  let credential: VeewerClientOptions;
+
+  if (apiKey) {
+    credential = { apiKey, baseUrl };
+  } else if (bearer && verifier) {
+    // Verified HERE, before anything is forwarded: the spec forbids passing on a token that was
+    // not issued for this server, and the backend would refuse it anyway -- but a 401 from
+    // upstream would come back as a tool error, not as the challenge the client needs.
+    const payload = await verifier.verify(bearer);
+    if (!payload) {
+      sendUnauthorized(res, "invalid_token", "The access token is invalid or has expired. Sign in again.");
+      return;
+    }
+
+    credential = { accessToken: bearer, baseUrl };
+  } else {
     // Answered before any call to the backend: a request with no credential is not the backend's
     // problem to diagnose, and this way an unauthenticated flood costs us no upstream traffic.
-    sendError(
+    sendUnauthorized(
       res,
-      401,
-      UNAUTHORIZED_CODE,
-      "Missing API key. Send it in the x-api-key header. Create one at https://veewer.com/api-keys.",
+      undefined,
+      oauth
+        ? "Sign in to VEEWER to use this server, or send an API key in the x-api-key header (https://veewer.com/api-keys)."
+        : "Missing API key. Send it in the x-api-key header. Create one at https://veewer.com/api-keys.",
     );
     return;
   }
@@ -175,7 +230,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse, log: Request
 
   log.rpc = methodOf(body);
 
-  const server = createVeewerServer(new VeewerClient({ apiKey, baseUrl }), {
+  const server = createVeewerServer(new VeewerClient(credential), {
     // A failed tool is still a successful JSON-RPC response, so without this the access log
     // would read 200 through an outage.
     onToolError: (tool, message) => console.error(`tool ${tool} failed: ${message}`),
@@ -236,6 +291,16 @@ async function route(req: IncomingMessage, res: ServerResponse, log: RequestLog)
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ status: "ok", version: SERVER_VERSION, uptime: Math.round(process.uptime()) }));
     return;
+  }
+
+  if (oauth) {
+    const paths = metadataPaths(oauth);
+    if (pathname === paths.withPath || pathname === paths.root) {
+      // Unauthenticated by definition: this is how a client learns where to authenticate.
+      res.writeHead(200, { "content-type": "application/json", "cache-control": "public, max-age=300" });
+      res.end(JSON.stringify(protectedResourceMetadata(oauth)));
+      return;
+    }
   }
 
   if (pathname !== MCP_PATH) {

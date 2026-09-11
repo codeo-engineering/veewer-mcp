@@ -53,14 +53,24 @@ for the armchair model"*.
 | `VEEWER_API_KEY` | yes | — | stdio only |
 | `VEEWER_API_URL` | no | `https://server.veewer.com/api/v1/public` | both |
 | `PORT` | no | `3000` | hosted only |
+| `VEEWER_OAUTH_ISSUER` | no | — (OAuth off) | hosted only |
+| `MCP_PUBLIC_URL` | with the issuer | — | hosted only |
 
 `VEEWER_API_URL` only exists for testing against a non-production VEEWER instance.
 
 ## Running it as a hosted server
 
 VEEWER hosts this server at **`https://mcp.veewer.com/mcp`**. Point an MCP client that supports the
-Streamable HTTP transport at that URL and send your API key in the `x-api-key` header; nothing needs
-to be installed. `https://mcp.veewer.com/health` reports the running version.
+Streamable HTTP transport at that URL; nothing needs to be installed. Two ways to sign in:
+
+- **Sign in with your VEEWER account** (OAuth). Add the URL as a connector in Claude
+  (Customize > Connectors > Add custom connector), or in Claude Code with
+  `claude mcp add --transport http veewer https://mcp.veewer.com/mcp`, and press Connect: your
+  browser opens the VEEWER sign-in, you allow read access, and the client keeps a token that it
+  refreshes on its own. Disconnect at any time from veewer.com/api-keys.
+- **API key**, for clients that cannot open a browser: send it in the `x-api-key` header.
+
+`https://mcp.veewer.com/health` reports the running version.
 
 The package ships a second entry point that speaks MCP over HTTP instead of stdio, for hosting one
 shared server rather than asking every user to run their own:
@@ -75,9 +85,15 @@ request**, in the `x-api-key` header, so one instance serves every account and e
 ever sees their own models. `VEEWER_API_KEY` is not used here — a key in the environment would be
 one account's key for everybody.
 
-The key goes in `x-api-key` and nowhere else. `Authorization: Bearer` is not accepted: the VEEWER
-API refuses it too, and that header is reserved for the OAuth access token that a later version
-will use.
+The key goes in `x-api-key` and nowhere else. `Authorization: Bearer` carries the OAuth access
+token, never an API key: the two are different credentials and the VEEWER API tells them apart by
+header.
+
+OAuth is switched on by two environment variables: `VEEWER_OAUTH_ISSUER` (the VEEWER backend
+origin that issues tokens, e.g. `https://server.veewer.com`) and `MCP_PUBLIC_URL` (this server's
+public URL exactly as users type it, e.g. `https://mcp.veewer.com/mcp`). With them set the server
+serves `/.well-known/oauth-protected-resource`, answers unauthenticated calls with a `401` that
+names it, and verifies bearer tokens against the issuer's JWKS. Without them it is API-key only.
 
 It is stateless: every call is a self-contained `POST /mcp` that answers with a JSON body, with no
 session and no long-lived stream, so it can be restarted or scaled without dropping anyone.

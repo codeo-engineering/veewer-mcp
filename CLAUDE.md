@@ -150,6 +150,39 @@ the owner on 2026-09-11:
   Windows PowerShell 5.1's `Invoke-WebRequest` — its default TLS settings fail the handshake and
   look like a bad certificate.
 
+## OAuth (the resource-server side, 23002-1140)
+
+`src/oauth.ts` makes the hosted server an OAuth 2.1 resource server per the MCP authorization
+spec (version 2026-07-28); the authorization server is the VEEWER backend (design and the
+measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.md`).
+
+- Switched on by `VEEWER_OAUTH_ISSUER` + `MCP_PUBLIC_URL`. **Deliberately off without them**: the
+  backend it points at may have `OAuth:Enabled=false`, and a `WWW-Authenticate` that names a 404
+  metadata document sends every client into a dead discovery loop. Prod: issuer
+  `https://server.veewer.com`, resource `https://mcp.veewer.com/mcp`. The resource must equal the
+  URL users type, path included — Claude compares them literally.
+- Unauthenticated `POST /mcp` → **401 + `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp", scope="models:read"`**;
+  a bad bearer adds `error="invalid_token"`. Only a transport-level 401 makes Claude start the
+  flow; a 200 with `isError` is shown to the model as text.
+- Protected resource metadata is served at both `/.well-known/oauth-protected-resource/mcp` (RFC
+  9728 path form, tried first) and `/.well-known/oauth-protected-resource`.
+- Bearer tokens are verified **locally** with `jose` against `{issuer}/.well-known/jwks.json`:
+  RS256, `iss`, **`aud` = the resource** (a token the same issuer minted for another resource is
+  refused — measured), `exp`, plus the backend's `purpose=mcp` and `uid` claims. Nothing is
+  forwarded before that check. The verified token then goes to the public API as
+  `Authorization: Bearer`; `VeewerClient` takes either `apiKey` or `accessToken`.
+- `x-api-key` still works and wins when both are present.
+- Every tool carries `annotations: readOnly` (`readOnlyHint`, `destructiveHint:false`,
+  `idempotentHint`, `openWorldHint:false`) — the Connectors Directory review rejects tools
+  without them.
+- Local e2e recipe: backend on 5057 as `Environment.DEV` (the issuer is derived from
+  `BackEndUrl`, so `PRODUCTION_DEV` would mint `iss=https://veewerdev…` and fail here) with
+  `OAuth__Enabled=true`, `OAuth__SigningKeyPem=<pem>`, `OAuth__Resources__1=http://localhost:3001/mcp`;
+  this server with `PORT=3001 VEEWER_API_URL=http://localhost:5057/api/v1/public
+  VEEWER_OAUTH_ISSUER=http://localhost:5057 MCP_PUBLIC_URL=http://localhost:3001/mcp` (`http`
+  is accepted for `localhost` only). Node lower-cases response header names — read
+  `www-authenticate`, not `WWW-Authenticate`, in a test.
+
 ## Things that will bite
 
 - **No secrets in this repository, ever.** The API key arrives from the environment or from the

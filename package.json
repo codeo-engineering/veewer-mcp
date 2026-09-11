@@ -1,6 +1,6 @@
 {
   "name": "@veewer/mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server for VEEWER — read your 3D models, folders and embed codes from any AI assistant.",
   "license": "MIT",
   "type": "module",
@@ -36,6 +36,7 @@
   "homepage": "https://veewer.com/mcp",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "jose": "^6.2.12",
     "zod": "^3.23.8"
   },
   "devDependencies": {

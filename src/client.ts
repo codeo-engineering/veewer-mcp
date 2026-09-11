@@ -52,17 +52,30 @@ export class VeewerApiError extends Error {
   }
 }
 
+/**
+ * Exactly one credential: a per-user API key (sent as `x-api-key`) or an OAuth access token
+ * (sent as `Authorization: Bearer`, 23002-1140). The backend's public API accepts both and
+ * mints the same identity from either; which header carries it is the only difference here.
+ */
 export interface VeewerClientOptions {
-  apiKey: string;
+  apiKey?: string;
+  accessToken?: string;
   baseUrl?: string;
 }
 
 export class VeewerClient {
-  private readonly apiKey: string;
+  private readonly authHeaders: Record<string, string>;
   private readonly baseUrl: string;
 
   constructor(options: VeewerClientOptions) {
-    this.apiKey = options.apiKey;
+    if (options.accessToken) {
+      this.authHeaders = { authorization: `Bearer ${options.accessToken}` };
+    } else if (options.apiKey) {
+      this.authHeaders = { "x-api-key": options.apiKey };
+    } else {
+      throw new Error("VeewerClient needs an apiKey or an accessToken.");
+    }
+
     // Sondaki egik cizgi kirpiliyor: adres yollari basta egik cizgiyle birlesiyor, aksi halde
     // istek cift egik cizgiyle gider.
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -81,7 +94,7 @@ export class VeewerClient {
     try {
       response = await fetch(url, {
         headers: {
-          "x-api-key": this.apiKey,
+          ...this.authHeaders,
           accept: "application/json",
         },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -105,7 +118,9 @@ export class VeewerClient {
 
       try {
         const parsed = JSON.parse(body);
-        message = parsed?.message ?? body;
+        // The OAuth scheme answers in RFC 6749 shape (error_description); the API key scheme
+        // and every other endpoint use `message`.
+        message = parsed?.message ?? parsed?.error_description ?? body;
       } catch {
         // Govde JSON degilse ham metin kullanilir.
       }

@@ -62,6 +62,14 @@ const listInput = {
   cursor: z.string().optional().describe("Pass the nextCursor from a previous call to get the next page."),
 };
 
+/**
+ * Every tool is a read. The annotations say so to the client (Claude shows read-only tools
+ * without a confirmation step) and the Connectors Directory review rejects a tool without
+ * `readOnlyHint`/`destructiveHint` (23002-1140). `openWorldHint: false`: the tools talk to
+ * VEEWER only, never to arbitrary hosts.
+ */
+const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+
 export function createVeewerServer(client: VeewerClient, options: ServerOptions = {}): McpServer {
   const server = new McpServer({
     name: SERVER_NAME,
@@ -98,6 +106,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         "List the 3D models in the user's VEEWER storage, newest first. Returns each model's id, name, " +
         "status (active, processing or failed), format, the storage it takes in bytes and whether it has AR. " +
         "Paged: pass the returned nextCursor to continue.",
+      annotations: readOnly,
       inputSchema: listInput,
     },
     async ({ folderId, limit, cursor }) =>
@@ -109,6 +118,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     {
       title: "Search models",
       description: "Find the user's VEEWER models whose name contains the given text.",
+      annotations: readOnly,
       inputSchema: {
         query: z.string().min(1).describe("Text to look for in the model name."),
         ...listInput,
@@ -127,6 +137,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       description:
         "Read one VEEWER model by id: name, status, failure reason if the conversion failed, " +
         "format, storage taken in bytes, AR availability and view count.",
+      annotations: readOnly,
       inputSchema: { modelId: z.string().min(1).describe("The model id.") },
     },
     async ({ modelId }) =>
@@ -139,6 +150,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       title: "List folders",
       description:
         "List the user's VEEWER folders. Leave parentId empty for the top level; a top-level folder has parentId null.",
+      annotations: readOnly,
       inputSchema: { parentId: z.string().optional().describe("List the folders inside this folder.") },
     },
     async ({ parentId }) =>
@@ -156,6 +168,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       description:
         "Get a ready-to-paste HTML iframe that shows this VEEWER model on any website. " +
         "The width and height come from the model's viewer settings.",
+      annotations: readOnly,
       inputSchema: { modelId: z.string().min(1).describe("The model id.") },
     },
     async ({ modelId }) =>
@@ -170,6 +183,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     {
       title: "Get share link",
       description: "Get the link that shows this VEEWER model in a browser, for sharing with anyone.",
+      annotations: readOnly,
       inputSchema: { modelId: z.string().min(1).describe("The model id.") },
     },
     async ({ modelId }) =>
@@ -184,6 +198,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     {
       title: "Get viewer URL",
       description: "Get the viewer URL of a VEEWER model, the address an iframe would point at.",
+      annotations: readOnly,
       inputSchema: { modelId: z.string().min(1).describe("The model id.") },
     },
     async ({ modelId }) =>
@@ -207,6 +222,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         "unknown, not unlimited. usedStorageBytes already sums every model, and each model's own footprint is " +
         "its storageBytes; the storage a file not yet uploaded will take cannot be predicted from either — " +
         "say so rather than estimate.",
+      annotations: readOnly,
       inputSchema: {},
     },
     async () => respond("get_account", () => client.get<VeewerAccount>("/account")),
