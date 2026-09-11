@@ -14,6 +14,14 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-11
+
+### Changed
+
+- The `list_models`/`search_models` `folderId` input and the `list_folders` description now say
+  that a top-level model or folder carries `null`, and that there is no top-level-only filter.
+  Requires backend 23002-1129, which stops returning the unlistable root container id.
+
 ## [0.2.0] - 2026-09-10
 
 ### Added
@@ -100,6 +108,7 @@ Versioning rules for this repository:
 - Upload, rename and delete are deliberately absent in this version: uploading spends account
   credits and deleting cannot be undone, neither of which belongs in an agent's hands yet.
 
-[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/codeo-engineering/veewer-mcp/releases/tag/v0.1.0

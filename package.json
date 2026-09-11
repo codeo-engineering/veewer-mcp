@@ -1,6 +1,6 @@
 {
   "name": "@veewer/mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for VEEWER — read your 3D models, folders and embed codes from any AI assistant.",
   "license": "MIT",
   "type": "module",

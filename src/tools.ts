@@ -51,7 +51,13 @@ export interface ServerOptions {
 
 /** Listing and searching share one endpoint; what makes them separate tools is intent, not address. */
 const listInput = {
-  folderId: z.string().optional().describe("Only models in this folder."),
+  folderId: z
+    .string()
+    .optional()
+    .describe(
+      "Only models in this folder. Leave empty for all models. A model at the top level has folderId null; " +
+        "there is no top-level-only filter, so list all and keep the ones with a null folderId.",
+    ),
   limit: z.number().int().min(1).max(100).optional().describe("How many models to return (default 25)."),
   cursor: z.string().optional().describe("Pass the nextCursor from a previous call to get the next page."),
 };
@@ -130,7 +136,8 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     "list_folders",
     {
       title: "List folders",
-      description: "List the user's VEEWER folders. Leave parentId empty for the top level.",
+      description:
+        "List the user's VEEWER folders. Leave parentId empty for the top level; a top-level folder has parentId null.",
       inputSchema: { parentId: z.string().optional().describe("List the folders inside this folder.") },
     },
     async ({ parentId }) =>
