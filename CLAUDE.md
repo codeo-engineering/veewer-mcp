@@ -103,6 +103,36 @@ npm publish --access public      # prepublishOnly runs the build
 `.gitignore`, which is why `dist/` is ignored in git yet present in the tarball. Confirm with
 `npm pack --dry-run` before publishing.
 
+## Hosting (the remote transport)
+
+The HTTP server runs on **Azure App Service Linux B1** (measured 2026-09-11 from the Retail Prices
+API: €0.0146/h ≈ €10.66/mo, $0.017/h ≈ $12.41/mo; the portal quoted 435.44 TRY/mo), created by
+the owner on 2026-09-11:
+
+- Resource group `veewer-mcp-rg`, plan `veewer-mcp-plan`, app `veewer-mcp`, East US, Node 22 LTS,
+  no Application Insights. Host: `veewer-mcp-gmeaevgbframbwbv.eastus-01.azurewebsites.net`
+  (Azure's "secure unique default hostname"; a custom domain can be bound later).
+- Endpoints: `GET /health`, `POST /mcp`. App Service injects `PORT`; nothing else is needed.
+- App settings: `SCM_DO_BUILD_DURING_DEPLOYMENT=true` (Oryx runs `npm install` + `npm run build`
+  on the server, so the zip carries **source**, not `dist/`) and `VEEWER_API_URL`, which points at
+  the **dev** backend until the prod publish that carries the public API; remove the setting then
+  and the client falls back to `server.veewer.com`.
+- Deploy from a checkout:
+
+  ```powershell
+  # zip package.json, package-lock.json, tsconfig.json, src/ — with FORWARD-slash entry names.
+  # Windows Compress-Archive writes "src\client.ts" and Oryx then finds no src/ (measured: TS6053
+  # "file not found" for every source file). Use python's zipfile or 7-Zip.
+  az webapp deploy -g veewer-mcp-rg -n veewer-mcp --src-path veewer-mcp.zip --type zip
+  ```
+
+  Build logs live in Kudu: `az rest --url https://<app>.scm.eastus-01.azurewebsites.net/api/deployments`
+  then `/api/deployments/{id}/log` and each entry's `details_url` — `az webapp log deployment show`
+  only prints the summary ("Deployment Failed", no reason).
+- First smoke test (2026-09-11, v0.3.0): `/health` 200, keyless `POST /mcp` 401, and with a dev
+  API key `initialize` → `tools/list` (8 tools) → `get_account` / `list_models` / `get_share_link`
+  all returned live data from veewerdev.
+
 ## Things that will bite
 
 - **No secrets in this repository, ever.** The API key arrives from the environment or from the
