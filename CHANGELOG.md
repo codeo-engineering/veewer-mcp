@@ -14,6 +14,16 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-11
+
+### Added
+
+- `get_account` returns `creditCosts` (credits per upload for every format), `usedStorageBytes`
+  and `totalStorageBytes` (null when the stored quota cannot be read); models carry `format` and
+  `storageBytes`. The tool description tells the agent to count whole models, round down and
+  name the format — until now it invented an average model size and a per-format cost.
+  The fields are absent on backends before 23002-1130; every tool still works there.
+
 ## [0.2.1] - 2026-09-11
 
 ### Changed
@@ -108,7 +118,8 @@ Versioning rules for this repository:
 - Upload, rename and delete are deliberately absent in this version: uploading spends account
   credits and deleting cannot be undone, neither of which belongs in an agent's hands yet.
 
-[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/codeo-engineering/veewer-mcp/releases/tag/v0.1.0

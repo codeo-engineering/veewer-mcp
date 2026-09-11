@@ -96,7 +96,8 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       title: "List models",
       description:
         "List the 3D models in the user's VEEWER storage, newest first. Returns each model's id, name, " +
-        "status (active, processing or failed) and whether it has AR. Paged: pass the returned nextCursor to continue.",
+        "status (active, processing or failed), format, the storage it takes in bytes and whether it has AR. " +
+        "Paged: pass the returned nextCursor to continue.",
       inputSchema: listInput,
     },
     async ({ folderId, limit, cursor }) =>
@@ -125,7 +126,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       title: "Get a model",
       description:
         "Read one VEEWER model by id: name, status, failure reason if the conversion failed, " +
-        "AR availability and view count.",
+        "format, storage taken in bytes, AR availability and view count.",
       inputSchema: { modelId: z.string().min(1).describe("The model id.") },
     },
     async ({ modelId }) =>
@@ -197,8 +198,15 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     {
       title: "Get account summary",
       description:
-        "Read the user's VEEWER plan, remaining credits and storage in use. Useful for answering " +
-        "how much room is left before uploading more models.",
+        "Read the user's VEEWER plan, remaining credits, storage in use and the credit cost of one upload " +
+        "per file format (creditCosts). To answer how many more models can be uploaded: divide " +
+        "availableCredit by the credits of the format in question and round DOWN to whole models; never " +
+        "report a fraction of a model, and if availableCredit is below the format's cost say that format " +
+        "cannot be uploaded yet. Name the format beside every count. Storage is a second, separate " +
+        "ceiling (usedStorageBytes against totalStorageBytes); a null totalStorageBytes means the quota is " +
+        "unknown, not unlimited. usedStorageBytes already sums every model, and each model's own footprint is " +
+        "its storageBytes; the storage a file not yet uploaded will take cannot be predicted from either — " +
+        "say so rather than estimate.",
       inputSchema: {},
     },
     async () => respond("get_account", () => client.get<VeewerAccount>("/account")),

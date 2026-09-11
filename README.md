@@ -39,12 +39,12 @@ for the armchair model"*.
 | --- | --- |
 | `list_models` | Models in your storage, newest first, paged |
 | `search_models` | Models whose name contains some text |
-| `get_model` | One model: status, failure reason, AR availability, view count |
+| `get_model` | One model: status, failure reason, format, storage taken, AR availability, view count |
 | `list_folders` | Your folders |
 | `get_embed_code` | A ready-to-paste `<iframe>` for a model |
 | `get_share_link` | The shareable link (and the AR link when the model has one) |
 | `get_viewer_url` | The viewer URL an iframe would point at |
-| `get_account` | Plan, remaining credits and storage in use |
+| `get_account` | Plan, remaining credits, storage in use and the credit cost of one upload per format |
 
 ## Configuration
 

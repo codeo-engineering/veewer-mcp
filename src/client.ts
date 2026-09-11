@@ -135,6 +135,10 @@ export interface VeewerModel {
   status: "active" | "processing" | "failed";
   failureReason: string | null;
   hasAr: boolean;
+  /** Upload format, upper case ("RVT"); the same names as VeewerAccount.creditCosts. */
+  format: string | null;
+  /** Storage the model takes against the quota, in bytes (converted output, not the source file); 0 while processing. */
+  storageBytes: number;
   hasThumbnail: boolean;
   viewCount: number;
   uploadedAt: string | null;
@@ -168,4 +172,14 @@ export interface VeewerAccount {
   usedCredit: number;
   usedStorage: string | null;
   totalStorage: string | null;
+  usedStorageBytes: number;
+  /** null means the quota could not be read, not that it is unlimited; 0 is a real zero. */
+  totalStorageBytes: number | null;
+  /** Credits one upload of each format costs; the list an agent divides availableCredit by. */
+  creditCosts: VeewerCreditCost[];
+}
+
+export interface VeewerCreditCost {
+  format: string;
+  credits: number;
 }
