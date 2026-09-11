@@ -14,6 +14,12 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+### Added
+
+- The hosted server is live at `https://mcp.veewer.com/mcp` (Azure App Service Linux B1, East
+  US; DNS-only in Cloudflare with an App Service managed certificate). README and the repository
+  guide describe the deploy and the domain setup.
+
 ## [0.3.0] - 2026-09-11
 
 ### Added

@@ -132,6 +132,23 @@ the owner on 2026-09-11:
 - First smoke test (2026-09-11, v0.3.0): `/health` 200, keyless `POST /mcp` 401, and with a dev
   API key `initialize` → `tools/list` (8 tools) → `get_account` / `list_models` / `get_share_link`
   all returned live data from veewerdev.
+- **Public address: `https://mcp.veewer.com/mcp`** (same day). The `/mcp` after an `mcp.` host
+  looks doubled but is the convention — Linear `mcp.linear.app/mcp`, Notion `mcp.notion.com/mcp`,
+  Sentry `mcp.sentry.dev/mcp`, Cloudflare `*.mcp.cloudflare.com/mcp` — because `/health` and,
+  later, `/.well-known/oauth-protected-resource` share the host; do not move the protocol to `/`.
+  DNS is in Cloudflare (zone `veewer.com`) and **DNS-only (grey cloud), deliberately**: the free
+  App Service managed certificate validates and renews through the CNAME, which a proxied record
+  hides; the backend's reasons for sitting behind Cloudflare (client-IP resolution, IP rate
+  limits) do not apply here, and Cloudflare's 100 s proxy timeout would only add a failure mode.
+  Records: `CNAME mcp → veewer-mcp-gmeaevgbframbwbv.eastus-01.azurewebsites.net`,
+  `TXT asuid.mcp → <customDomainVerificationId of the app>`. Azure side:
+  `az webapp config hostname add`, then the certificate — `az webapp config ssl create` threw a
+  JSON-decode error and created nothing, so it was done with an ARM `PUT
+  Microsoft.Web/certificates/mcp.veewer.com` (`canonicalName` + `serverFarmId`), then
+  `az webapp config ssl bind --ssl-type SNI`. Result: GeoTrust-issued managed cert valid to
+  2027-03-11 (auto-renews), HTTPS-only on (HTTP answers 301). Verify with `curl`/Python, not
+  Windows PowerShell 5.1's `Invoke-WebRequest` — its default TLS settings fail the handshake and
+  look like a bad certificate.
 
 ## Things that will bite
 

@@ -58,6 +58,10 @@ for the armchair model"*.
 
 ## Running it as a hosted server
 
+VEEWER hosts this server at **`https://mcp.veewer.com/mcp`**. Point an MCP client that supports the
+Streamable HTTP transport at that URL and send your API key in the `x-api-key` header; nothing needs
+to be installed. `https://mcp.veewer.com/health` reports the running version.
+
 The package ships a second entry point that speaks MCP over HTTP instead of stdio, for hosting one
 shared server rather than asking every user to run their own:
 
