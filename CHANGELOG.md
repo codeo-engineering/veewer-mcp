@@ -14,6 +14,18 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-17
+
+### Added
+
+- `rename_model(modelId, name)`: the first write tool. Calls `PATCH /models/{id}` on the public
+  API and returns the model; `readOnlyHint: false`, `destructiveHint: false`,
+  `idempotentHint: true`. Registered only for an OAuth grant that carries `models:write`; API
+  keys always see it and a read-only key gets the backend's 403 message. Needs backend
+  23002-1146.
+- `VeewerClient.patch` (JSON in, JSON out) sharing the deadline and error mapping with `get`;
+  a ProblemDetails `title` is now read as the error message too.
+
 ## [0.5.0] - 2026-09-17
 
 ### Added

@@ -20,7 +20,7 @@
 import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { SCOPE_READ, isToolAllowed } from "./scopes.js";
+import { SCOPE_READ, SCOPE_WRITE, isToolAllowed } from "./scopes.js";
 import {
   VeewerAccount,
   VeewerApiError,
@@ -73,12 +73,18 @@ const listInput = {
 };
 
 /**
- * Every tool so far is a read. The annotations say so to the client (Claude shows read-only tools
+ * Annotations tell the client what a call does before it is made (Claude shows read-only tools
  * without a confirmation step) and the Connectors Directory review rejects a tool without
  * `readOnlyHint`/`destructiveHint` (23002-1140). `openWorldHint: false`: the tools talk to
- * VEEWER only, never to arbitrary hosts.
+ * VEEWER only, never to arbitrary hosts. A write tool declares `readOnlyHint: false` and says
+ * whether it is destructive. The spec's wording for `destructiveHint: false` is "only additive
+ * updates"; a rename overwrites the old name, so this is a judgement call: nothing is lost that
+ * a second rename cannot put back, and Claude asks for confirmation on any non-read-only tool
+ * either way. Repeating it with the same name changes nothing (`idempotentHint: true`). A delete
+ * tool must say `destructiveHint: true`.
  */
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+const reversibleWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 
 export function createVeewerServer(client: VeewerClient, options: ServerOptions = {}): McpServer {
   const server = new McpServer({
@@ -162,6 +168,33 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     },
     async ({ modelId }) =>
       respond("get_model", () => client.get<VeewerModel>(`/models/${encodeURIComponent(modelId)}`)),
+  ));
+
+  // The first write tool (23002-1146). Registered only for a grant that carries models:write;
+  // an API key always sees it and a read-only key gets the backend's 403 sentence back.
+  whenGranted(SCOPE_WRITE, () => server.registerTool(
+    "rename_model",
+    {
+      title: "Rename a model",
+      description:
+        "Change the display name of one VEEWER model and return the model as get_model shows it. " +
+        "Only the name shown in VEEWER changes; the uploaded file is untouched. Sending the current name " +
+        "changes nothing. Needs the \"Change your models\" permission on the API key or connection.",
+      annotations: reversibleWrite,
+      inputSchema: {
+        modelId: z.string().min(1).describe("The model id."),
+        // trim() first, exactly as the backend's ModelNameRules does, so a 200-char name with
+        // surrounding spaces is not refused here and accepted there.
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .describe("The new name: 1 to 200 characters, no line breaks; surrounding spaces are removed."),
+      },
+    },
+    async ({ modelId, name }) =>
+      respond("rename_model", () => client.patch<VeewerModel>(`/models/${encodeURIComponent(modelId)}`, { name })),
   ));
 
   whenGranted(SCOPE_READ, () => server.registerTool(

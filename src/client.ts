@@ -90,13 +90,33 @@ export class VeewerClient {
       }
     }
 
+    return this.send<T>(url, { method: "GET" });
+  }
+
+  /** JSON body in, JSON out; the first write call (rename_model, 23002-1146). */
+  async patch<T>(path: string, body: unknown): Promise<T> {
+    return this.send<T>(new URL(this.baseUrl + path), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * One place for the credential, the deadline and the error mapping, so a read and a write
+   * fail in exactly the same words.
+   */
+  private async send<T>(url: URL, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<T> {
     let response: Response;
     try {
       response = await fetch(url, {
+        method: init.method,
         headers: {
           ...this.authHeaders,
           accept: "application/json",
+          ...init.headers,
         },
+        body: init.body,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
@@ -119,8 +139,13 @@ export class VeewerClient {
       try {
         const parsed = JSON.parse(body);
         // The OAuth scheme answers in RFC 6749 shape (error_description); the API key scheme
-        // and every other endpoint use `message`.
-        message = parsed?.message ?? parsed?.error_description ?? body;
+        // and every other endpoint use `message`; a body the framework rejected before the
+        // action ran (malformed JSON, wrong type) is a ValidationProblemDetails whose `title` is
+        // generic and whose reasons sit in `errors` -- so those come first.
+        const errors = parsed?.errors && typeof parsed.errors === "object"
+          ? Object.values(parsed.errors as Record<string, unknown>).flat().filter((e) => typeof e === "string").join(" ")
+          : "";
+        message = parsed?.message ?? parsed?.error_description ?? (errors || parsed?.title) ?? body;
       } catch {
         // Govde JSON degilse ham metin kullanilir.
       }
@@ -143,7 +168,11 @@ export class VeewerClient {
       throw new VeewerApiError(message, response.status);
     }
 
-    return (await response.json()) as T;
+    // A write may answer with no body (204, or an empty 200); `response.json()` would throw
+    // "Unexpected end of JSON input" on a call that succeeded.
+    if (response.status === 204) return undefined as T;
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 }
 

@@ -225,10 +225,12 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   backend rule: without it a stalled backend holds a hosted request until the platform cuts it.
 - The repository is **private** while all repositories in the `codeo-engineering` organization are;
   it must be made public before the npm publish, because the package page links to it.
-- The tools cover reads only so far. Adding a write tool means adding a write endpoint to the
-  backend first, guarded with `[Authorize(Policy = ApiScopes.ModelsWrite)]` (or `ModelsDelete`) —
-  since 23002-1145 both the API-key and the OAuth scheme land in one `scope` claim and the policy
-  name is the scope, so an unguarded endpoint is the only way an old read-only key gains write
-  access. On this side the tool is registered through `whenGranted(SCOPE_WRITE, …)` with
-  `readOnlyHint: false` (and `destructiveHint: true` for delete); registering it with the read
-  annotations would make Claude skip its confirmation step.
+- **`rename_model` (23002-1146) is the template for every further write tool.** The backend
+  endpoint comes first, guarded with `[Authorize(Policy = ApiScopes.ModelsWrite)]` (or
+  `ModelsDelete`) — since 23002-1145 both the API-key and the OAuth scheme land in one `scope`
+  claim and the policy name is the scope, so an unguarded endpoint is the only way an old
+  read-only key gains write access. On this side: `client.patch`/a sibling for the verb, and the
+  registration through `whenGranted(SCOPE_WRITE, …)` with `readOnlyHint: false` (and
+  `destructiveHint: true` for delete); registering a write with the `readOnly` annotations would
+  make Claude skip its confirmation step. Against a backend that predates the endpoint the tool
+  is listed and answers a 404 tool error — harmless, so the deploy order is backend → MCP.
