@@ -197,6 +197,30 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       respond("rename_model", () => client.patch<VeewerModel>(`/models/${encodeURIComponent(modelId)}`, { name })),
   ));
 
+  // The second write tool (23002-1147): same endpoint as rename_model, other field. `folderId`
+  // travels as an explicit null for the top level -- JSON.stringify keeps null and drops
+  // undefined, and the backend treats an absent field as "unchanged".
+  whenGranted(SCOPE_WRITE, () => server.registerTool(
+    "move_model",
+    {
+      title: "Move a model",
+      description:
+        "Move one VEEWER model into a folder, or to the top level, and return the model as get_model shows it. " +
+        "The model keeps its name. Needs the \"Change your models\" permission on the API key or connection.",
+      annotations: reversibleWrite,
+      inputSchema: {
+        modelId: z.string().min(1).describe("The model id."),
+        folderId: z
+          .string()
+          .min(1)
+          .nullable()
+          .describe("The target folder id from list_folders, or null to move the model to the top level."),
+      },
+    },
+    async ({ modelId, folderId }) =>
+      respond("move_model", () => client.patch<VeewerModel>(`/models/${encodeURIComponent(modelId)}`, { folderId })),
+  ));
+
   whenGranted(SCOPE_READ, () => server.registerTool(
     "list_folders",
     {

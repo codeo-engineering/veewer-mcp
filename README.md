@@ -1,11 +1,11 @@
 # @veewer/mcp
 
 MCP server for [VEEWER](https://veewer.com). It lets an AI assistant read the 3D models in your
-VEEWER account, hand you the embed code or share link for any of them and rename them — without
-you opening the site.
+VEEWER account, hand you the embed code or share link for any of them, and rename or move them —
+without you opening the site.
 
 A key or connection only does what you allowed it to: reading is always on, **"Change your
-models"** unlocks `rename_model`, and nothing here can upload or delete.
+models"** unlocks `rename_model` and `move_model`, and nothing here can upload or delete.
 
 Needs **Node.js 18 or newer** (20 LTS or newer recommended). On an older Node the server starts
 but every call fails, so it refuses to start instead and says why.
@@ -47,6 +47,7 @@ for the armchair model"*.
 | `get_viewer_url` | The viewer URL an iframe would point at |
 | `get_account` | Plan, remaining credits, storage in use and the credit cost of one upload per format |
 | `rename_model` | Change a model's display name (needs the "Change your models" permission) |
+| `move_model` | Move a model into a folder, or to the top level (same permission) |
 
 ## Configuration
 

@@ -225,6 +225,11 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   backend rule: without it a stalled backend holds a hosted request until the platform cuts it.
 - The repository is **private** while all repositories in the `codeo-engineering` organization are;
   it must be made public before the npm publish, because the package page links to it.
+- **`move_model` (23002-1147) sends `folderId: null` as an explicit null** for the top level:
+  `JSON.stringify` keeps `null` and drops `undefined`, and the backend reads an *absent* field
+  as "unchanged" — so never map "top level" to `undefined` on this side: alone it answers 400
+  "Nothing to update", and beside another field it would silently skip the move. Same endpoint
+  and annotations as `rename_model`.
 - **`rename_model` (23002-1146) is the template for every further write tool.** The backend
   endpoint comes first, guarded with `[Authorize(Policy = ApiScopes.ModelsWrite)]` (or
   `ModelsDelete`) — since 23002-1145 both the API-key and the OAuth scheme land in one `scope`

@@ -14,6 +14,14 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-17
+
+### Added
+
+- `move_model(modelId, folderId)`: moves a model into one of the user's folders, or to the top
+  level with `folderId: null`. Same `PATCH /models/{id}` as `rename_model`, same reversible-write
+  annotations, same `models:write` gate. Needs backend 23002-1147.
+
 ## [0.6.0] - 2026-09-17
 
 ### Added
