@@ -14,6 +14,25 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-17
+
+### Added
+
+- Scopes (`src/scopes.ts`): `models:read`, `models:write` and `models:delete`, the same
+  vocabulary as the backend. Protected resource metadata lists all three and the `401` challenge
+  asks for all three, so the VEEWER consent page can offer Changes/Delete as options. Needs
+  backend 23002-1145.
+- Tool registration is gated on the OAuth token's `scope` claim (`ServerOptions.grantedScopes`):
+  a tool whose scope the grant lacks is not listed. API-key callers still see every tool; a
+  scope the key lacks answers with the backend's 403 message. No write tool exists yet — the
+  gate is what 1146 (`rename_model`) will register through.
+
+### Changed
+
+- A verified bearer token must carry `models:read`; one without it is refused as invalid.
+- A bodiless `403` now reads "This key or connection does not allow that action." instead of
+  "Request failed with status 403".
+
 ## [0.4.0] - 2026-09-11
 
 ### Added

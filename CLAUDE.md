@@ -164,9 +164,21 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   metadata document sends every client into a dead discovery loop. Prod: issuer
   `https://server.veewer.com`, resource `https://mcp.veewer.com/mcp`. The resource must equal the
   URL users type, path included — Claude compares them literally.
-- Unauthenticated `POST /mcp` → **401 + `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp", scope="models:read"`**;
+- Unauthenticated `POST /mcp` → **401 + `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp", scope="models:read models:write models:delete"`**;
   a bad bearer adds `error="invalid_token"`. Only a transport-level 401 makes Claude start the
-  flow; a 200 with `isError` is shown to the model as text.
+  flow; a 200 with `isError` is shown to the model as text. The challenge asks for **all three
+  scopes** (23002-1145) so the consent page has Changes/Delete to untick. That Claude copies the
+  challenge's `scope` rather than `scopes_supported` is **inference, not measured** — both said
+  `models:read` in the 1140 run; check the `/oauth/authorize` query on the first live connection
+  after deploy. A token narrowed to `models:read` is still accepted.
+- **Scopes** (`src/scopes.ts`, same names as the backend's `ApiScopes`): the verified token's
+  `scope` claim reaches `createVeewerServer` as `grantedScopes`, and every registration goes
+  through `whenGranted(scope, …)` — a tool whose scope the grant lacks is **not registered**, so
+  the model never sees it (Claude's own 403 handling is deliberately not relied on). API-key
+  callers pass `grantedScopes: undefined` (the key's scopes live only in the backend) and see
+  every tool; a scope the key lacks comes back as the backend's 403 text, which names the fix.
+  A token without `models:read` is refused as `invalid_token` — the backend forces it into every
+  grant, so its absence means the token is not one of ours.
 - Protected resource metadata is served at both `/.well-known/oauth-protected-resource/mcp` (RFC
   9728 path form, tried first) and `/.well-known/oauth-protected-resource`.
 - Bearer tokens are verified **locally** with `jose` against `{issuer}/.well-known/jwks.json`:
@@ -213,7 +225,10 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   backend rule: without it a stalled backend holds a hosted request until the platform cuts it.
 - The repository is **private** while all repositories in the `codeo-engineering` organization are;
   it must be made public before the npm publish, because the package page links to it.
-- The tools deliberately cover reads only. Adding a write tool means adding a write endpoint to the
-  backend first, and that endpoint has to check the API key's `scope` claim — the backend issues it
-  today but nothing reads it, so every existing read-only key would otherwise gain write access
-  silently.
+- The tools cover reads only so far. Adding a write tool means adding a write endpoint to the
+  backend first, guarded with `[Authorize(Policy = ApiScopes.ModelsWrite)]` (or `ModelsDelete`) —
+  since 23002-1145 both the API-key and the OAuth scheme land in one `scope` claim and the policy
+  name is the scope, so an unguarded endpoint is the only way an old read-only key gains write
+  access. On this side the tool is registered through `whenGranted(SCOPE_WRITE, …)` with
+  `readOnlyHint: false` (and `destructiveHint: true` for delete); registering it with the read
+  annotations would make Claude skip its confirmation step.

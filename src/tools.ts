@@ -20,6 +20,7 @@
 import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { SCOPE_READ, isToolAllowed } from "./scopes.js";
 import {
   VeewerAccount,
   VeewerApiError,
@@ -47,6 +48,15 @@ export interface ServerOptions {
    * client anyway.
    */
   onToolError?: (tool: string, message: string) => void;
+
+  /**
+   * The scopes the caller's OAuth token carries (23002-1145). A tool whose scope is missing is
+   * NOT registered, so the model never sees a tool it cannot use -- Claude's own handling of a
+   * 403 was deliberately not relied on. `undefined` means "not known": an API key (its scopes
+   * live only in the backend) or the stdio entry; every tool is registered and a scope the key
+   * lacks comes back as the backend's 403 message, which names the fix.
+   */
+  grantedScopes?: string[];
 }
 
 /** Listing and searching share one endpoint; what makes them separate tools is intent, not address. */
@@ -63,7 +73,7 @@ const listInput = {
 };
 
 /**
- * Every tool is a read. The annotations say so to the client (Claude shows read-only tools
+ * Every tool so far is a read. The annotations say so to the client (Claude shows read-only tools
  * without a confirmation step) and the Connectors Directory review rejects a tool without
  * `readOnlyHint`/`destructiveHint` (23002-1140). `openWorldHint: false`: the tools talk to
  * VEEWER only, never to arbitrary hosts.
@@ -75,6 +85,16 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     name: SERVER_NAME,
     version: SERVER_VERSION,
   });
+
+  /**
+   * The scope gate around `server.registerTool`. Every registration below goes through it, so a
+   * new write tool cannot be added without naming the scope it needs. A thunk rather than a
+   * pass-through of the arguments: `registerTool` is generic over the input schema and a
+   * re-typed wrapper would lose the callback's argument inference.
+   */
+  const whenGranted = (scope: string, register: () => unknown): void => {
+    if (isToolAllowed(options.grantedScopes, scope)) register();
+  };
 
   /** Common wrapper for tool results: an error comes back readable instead of as a throw. */
   const respond = async (tool: string, run: () => Promise<unknown>) => {
@@ -98,7 +118,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     }
   };
 
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "list_models",
     {
       title: "List models",
@@ -111,9 +131,9 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     },
     async ({ folderId, limit, cursor }) =>
       respond("list_models", () => client.get<VeewerModelList>("/models", { folderId, limit, cursor })),
-  );
+  ));
 
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "search_models",
     {
       title: "Search models",
@@ -128,9 +148,9 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       respond("search_models", () =>
         client.get<VeewerModelList>("/models", { search: query, folderId, limit, cursor }),
       ),
-  );
+  ));
 
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "get_model",
     {
       title: "Get a model",
@@ -142,9 +162,9 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     },
     async ({ modelId }) =>
       respond("get_model", () => client.get<VeewerModel>(`/models/${encodeURIComponent(modelId)}`)),
-  );
+  ));
 
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "list_folders",
     {
       title: "List folders",
@@ -155,13 +175,13 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     },
     async ({ parentId }) =>
       respond("list_folders", () => client.get<VeewerFolder[]>("/folders", { parentId })),
-  );
+  ));
 
   // The three tools below call one endpoint. They are separate because of the user, not the model:
   // "give me the embed code", "give me a share link" and "the viewer address" are separate
   // intents, and expecting the caller to pick the right field out of one three-field JSON is a
   // step that need not exist.
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "get_embed_code",
     {
       title: "Get embed code",
@@ -176,9 +196,9 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         const embed = await client.get<VeewerEmbed>(`/models/${encodeURIComponent(modelId)}/embed`);
         return { modelId: embed.modelId, iframeCode: embed.iframeCode };
       }),
-  );
+  ));
 
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "get_share_link",
     {
       title: "Get share link",
@@ -191,9 +211,9 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         const embed = await client.get<VeewerEmbed>(`/models/${encodeURIComponent(modelId)}/embed`);
         return { modelId: embed.modelId, shareUrl: embed.shareUrl, arUrl: embed.arUrl };
       }),
-  );
+  ));
 
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "get_viewer_url",
     {
       title: "Get viewer URL",
@@ -206,9 +226,9 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         const embed = await client.get<VeewerEmbed>(`/models/${encodeURIComponent(modelId)}/embed`);
         return { modelId: embed.modelId, viewerUrl: embed.viewerUrl };
       }),
-  );
+  ));
 
-  server.registerTool(
+  whenGranted(SCOPE_READ, () => server.registerTool(
     "get_account",
     {
       title: "Get account summary",
@@ -226,7 +246,7 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       inputSchema: {},
     },
     async () => respond("get_account", () => client.get<VeewerAccount>("/account")),
-  );
+  ));
 
   return server;
 }

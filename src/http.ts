@@ -185,6 +185,10 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse, log: Request
   const apiKey = readApiKey(req);
   const bearer = apiKey ? undefined : readBearer(req);
   let credential: VeewerClientOptions;
+  // The scopes an OAuth token carries decide which tools are registered (23002-1145). An API
+  // key's scopes are not visible here (only its hash is known to the backend), so a key caller
+  // sees every tool and a scope it lacks comes back as the backend's own 403 message.
+  let grantedScopes: string[] | undefined;
 
   if (apiKey) {
     credential = { apiKey, baseUrl };
@@ -209,6 +213,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse, log: Request
     }
 
     credential = { accessToken: bearer, baseUrl };
+    grantedScopes = verdict.scopes;
   } else {
     // Answered before any call to the backend: a request with no credential is not the backend's
     // problem to diagnose, and this way an unauthenticated flood costs us no upstream traffic.
@@ -235,6 +240,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse, log: Request
   log.rpc = methodOf(body);
 
   const server = createVeewerServer(new VeewerClient(credential), {
+    grantedScopes,
     // A failed tool is still a successful JSON-RPC response, so without this the access log
     // would read 200 through an outage.
     onToolError: (tool, message) => console.error(`tool ${tool} failed: ${message}`),

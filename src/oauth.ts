@@ -18,8 +18,15 @@
  * enabled, and a challenge that names a 404 would send every client on a dead-end discovery.
  */
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { SCOPES, SCOPE_READ, parseScopes } from "./scopes.js";
 
-export const SCOPE = "models:read";
+/**
+ * The challenge asks for all three scopes (23002-1145) so the consent page has something to
+ * untick: Claude requests whatever the challenge (or, failing that, `scopes_supported`) names,
+ * and the user narrows it on the consent page. A token that comes back with only `models:read`
+ * is still accepted; the tools it cannot use are simply not registered for it.
+ */
+const REQUESTED_SCOPE = SCOPES.join(" ");
 
 export interface OAuthConfig {
   /** The authorization server's issuer, e.g. https://server.veewer.com (the backend origin). */
@@ -70,7 +77,7 @@ export function protectedResourceMetadata(config: OAuthConfig): Record<string, u
   return {
     resource: config.resource,
     authorization_servers: [config.issuer],
-    scopes_supported: [SCOPE],
+    scopes_supported: [...SCOPES],
     bearer_methods_supported: ["header"],
     resource_name: "VEEWER",
     resource_documentation: "https://veewer.com/mcp",
@@ -94,7 +101,7 @@ export function challengeHeader(config: OAuthConfig, error?: "invalid_token"): s
   const parts = [
     error ? `error="${error}"` : null,
     `resource_metadata="${url.origin}${metadataPaths(config).withPath}"`,
-    `scope="${SCOPE}"`,
+    `scope="${REQUESTED_SCOPE}"`,
   ].filter(Boolean);
 
   return `Bearer ${parts.join(", ")}`;
@@ -106,7 +113,9 @@ export function challengeHeader(config: OAuthConfig, error?: "invalid_token"): s
  * with 401 would sign every OAuth user out during a backend blip, since Claude treats
  * `invalid_token` as "get a new token" and would fail that against the same backend.
  */
-export type VerifyResult = { payload: JWTPayload } | { error: "invalid" | "unavailable" };
+export type VerifyResult =
+  | { payload: JWTPayload; scopes: string[] }
+  | { error: "invalid" | "unavailable" };
 
 export class TokenVerifier {
   private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
@@ -138,7 +147,15 @@ export class TokenVerifier {
         return { error: "invalid" };
       }
 
-      return { payload };
+      // The backend forces models:read into every grant, so a token without it is not one of
+      // ours (or the vocabulary changed underneath us); either way the read tools would 403.
+      const scopes = parseScopes(payload.scope);
+      if (!scopes.includes(SCOPE_READ)) {
+        console.error("bearer refused: token carries no models:read scope");
+        return { error: "invalid" };
+      }
+
+      return { payload, scopes };
     } catch (error) {
       const code = (error as { code?: unknown })?.code;
       // jose's own verdicts on the token are `ERR_JWT_*` / `ERR_JWS_*` / `ERR_JWKS_NO_MATCHING_KEY`;

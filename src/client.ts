@@ -133,7 +133,11 @@ export class VeewerClient {
         message =
           response.status === 429
             ? "Rate limit reached for this API key."
-            : `Request failed with status ${response.status}`;
+            : response.status === 403
+              // The backend's scope refusal normally carries its own text (23002-1145); this is
+              // the fallback for a bodiless 403, e.g. from a proxy in front of it.
+              ? "This key or connection does not allow that action. Check its permissions at https://veewer.com/api-keys."
+              : `Request failed with status ${response.status}`;
       }
 
       throw new VeewerApiError(message, response.status);
