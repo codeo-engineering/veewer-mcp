@@ -5,14 +5,25 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Versioning rules for this repository:
+Versioning rules for this repository (live since 1.0.0):
 
-- While the package is **not published**, a version is bumped and tagged at the close of each day
-  that changed it.
-- Once it is **live**, CI/CD performs the bump on every push, and nothing is pushed without the
-  owner's approval.
+- The version is bumped **by hand** in `package.json`, recorded here, and tagged `vX.Y.Z` in the
+  same commit; there is no CI/CD. Nothing is pushed or published without the owner's approval.
+- Tool names, their arguments and their result shapes are the public contract: removing or
+  renaming one, or changing an argument's meaning, is a **major** bump; a new tool or a new
+  optional argument is a minor bump.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-09-18
+
+### Changed
+
+- Stable contract. No code change from 0.9.0: the tool set (13 tools: read, rename, move,
+  delete, upload from a URL), the `models:read` / `models:write` / `models:delete` scopes and the
+  hosted server at `https://mcp.veewer.com/mcp` are what 1.x commits to. Measured before tagging:
+  a narrowed (read-only) OAuth grant in claude.ai survived a token refresh without re-consent,
+  and upload → rename → delete ran end to end against production.
 
 ## [0.9.0] - 2026-09-18
 
@@ -205,7 +216,8 @@ Versioning rules for this repository:
 - Upload, rename and delete are deliberately absent in this version: uploading spends account
   credits and deleting cannot be undone, neither of which belongs in an agent's hands yet.
 
-[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.6.0...v0.7.0

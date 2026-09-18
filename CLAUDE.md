@@ -88,19 +88,22 @@ cleans up in `finally`. Do not simplify that back into a bare `await`.
 
 ## Versioning and releases
 
-Two rules, and which one applies depends on whether the package is live:
+Live since **1.0.0 (2026-09-18)**. The version is bumped **by hand** — `package.json`, a
+CHANGELOG entry and the `vX.Y.Z` tag in one commit; there is no CI/CD (the earlier "CI/CD bumps
+on every push" rule was never built and was dropped at 1.0.0). **Nothing is pushed or published
+without the owner's explicit approval.** Semver against the tool contract: removing/renaming a
+tool or changing an argument's meaning is major; a new tool or optional argument is minor.
 
-1. **Not published yet** (today): a version is bumped and tagged at the close of each day that
-   changed the package.
-2. **Once published**: CI/CD performs the bump on every push, and **nothing is pushed without the
-   owner's explicit approval**.
-
-Publishing needs an npm account in the `veewer` organization:
+Publishing is the owner's step, in his own terminal (the npm account's 2FA is a security key):
 
 ```bash
-npm login
+npm login --auth-type=web        # the legacy prompt asks for an OTP that does not exist
+npm pack --dry-run
 npm publish --access public      # prepublishOnly runs the build
 ```
+
+A `404 Not Found - PUT .../@veewer%2fmcp` from publish means "not logged in", not a missing
+package; `npm view @veewer/mcp version` shows the new version about two minutes later.
 
 `package.json`'s `files` allowlist decides what ships (`dist/`, `README.md`); it wins over
 `.gitignore`, which is why `dist/` is ignored in git yet present in the tarball. Confirm with
