@@ -20,7 +20,7 @@
 import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { SCOPE_READ, SCOPE_WRITE, isToolAllowed } from "./scopes.js";
+import { SCOPE_DELETE, SCOPE_READ, SCOPE_WRITE, isToolAllowed } from "./scopes.js";
 import {
   VeewerAccount,
   VeewerApiError,
@@ -81,10 +81,13 @@ const listInput = {
  * updates"; a rename overwrites the old name, so this is a judgement call: nothing is lost that
  * a second rename cannot put back, and Claude asks for confirmation on any non-read-only tool
  * either way. Repeating it with the same name changes nothing (`idempotentHint: true`). A delete
- * tool must say `destructiveHint: true`.
+ * tool says `destructiveHint: true` (23002-1148): the model, its files and its view count are gone
+ * for good. It is still idempotent -- a second call on the same id answers "not found" and
+ * removes nothing further.
  */
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const reversibleWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+const destructiveWrite = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } as const;
 
 export function createVeewerServer(client: VeewerClient, options: ServerOptions = {}): McpServer {
   const server = new McpServer({
@@ -219,6 +222,31 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
     },
     async ({ modelId, folderId }) =>
       respond("move_model", () => client.patch<VeewerModel>(`/models/${encodeURIComponent(modelId)}`, { folderId })),
+  ));
+
+  // The destructive tool (23002-1148), behind its own scope: "Delete your models" is a separate
+  // box on the consent page and the key form, so a connection that may rename cannot delete.
+  // No `confirm` argument on purpose -- a field the model fills in itself is not a safeguard;
+  // the safeguard is the scope the user granted plus `destructiveHint`, which makes Claude ask
+  // before calling. The backend answers 204, so the result text is built here.
+  whenGranted(SCOPE_DELETE, () => server.registerTool(
+    "delete_model",
+    {
+      title: "Delete a model",
+      description:
+        "Permanently delete one VEEWER model: the uploaded file, the viewer and AR files, the share link and the view " +
+        "count are all removed and cannot be recovered. Use get_model first to confirm which model this is. " +
+        "Needs the \"Delete your models\" permission on the API key or connection.",
+      annotations: destructiveWrite,
+      inputSchema: {
+        modelId: z.string().min(1).describe("The id of the model to delete."),
+      },
+    },
+    async ({ modelId }) =>
+      respond("delete_model", async () => {
+        await client.delete(`/models/${encodeURIComponent(modelId)}`);
+        return { deleted: true, modelId };
+      }),
   ));
 
   whenGranted(SCOPE_READ, () => server.registerTool(

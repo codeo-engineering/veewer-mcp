@@ -1,11 +1,12 @@
 # @veewer/mcp
 
 MCP server for [VEEWER](https://veewer.com). It lets an AI assistant read the 3D models in your
-VEEWER account, hand you the embed code or share link for any of them, and rename or move them —
-without you opening the site.
+VEEWER account, hand you the embed code or share link for any of them, and rename, move or delete
+them — without you opening the site.
 
 A key or connection only does what you allowed it to: reading is always on, **"Change your
-models"** unlocks `rename_model` and `move_model`, and nothing here can upload or delete.
+models"** unlocks `rename_model` and `move_model`, **"Delete your models"** unlocks `delete_model`
+(a separate permission, because a deletion cannot be undone), and nothing here can upload yet.
 
 Needs **Node.js 18 or newer** (20 LTS or newer recommended). On an older Node the server starts
 but every call fails, so it refuses to start instead and says why.
@@ -48,6 +49,7 @@ for the armchair model"*.
 | `get_account` | Plan, remaining credits, storage in use and the credit cost of one upload per format |
 | `rename_model` | Change a model's display name (needs the "Change your models" permission) |
 | `move_model` | Move a model into a folder, or to the top level (same permission) |
+| `delete_model` | Permanently delete a model and its files (needs the "Delete your models" permission) |
 
 ## Configuration
 
@@ -69,7 +71,8 @@ Streamable HTTP transport at that URL; nothing needs to be installed. Two ways t
 - **Sign in with your VEEWER account** (OAuth). Add the URL as a connector in Claude
   (Customize > Connectors > Add custom connector), or in Claude Code with
   `claude mcp add --transport http veewer https://mcp.veewer.com/mcp`, and press Connect: your
-  browser opens the VEEWER sign-in, you allow read access, and the client keeps a token that it
+  browser opens the VEEWER sign-in, you tick the permissions you want to give (reading is always
+  on; changing and deleting are separate boxes), and the client keeps a token that it
   refreshes on its own. Disconnect at any time from veewer.com/api-keys.
 - **API key**, for clients that cannot open a browser: send it in the `x-api-key` header.
 

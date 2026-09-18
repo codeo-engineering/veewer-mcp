@@ -9,7 +9,7 @@
  *
  * That is why a server is built per request. An `McpServer` created once and shared would be
  * holding the first caller's client, and every later caller would read the first caller's
- * models. The objects are cheap -- registering eight tools is a handful of allocations -- and
+ * models. The objects are cheap -- registering a dozen tools is a handful of allocations -- and
  * the alternative is a cross-account data leak, so the trade is not close.
  *
  * Transport decisions, both deliberate:

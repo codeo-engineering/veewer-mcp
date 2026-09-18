@@ -102,6 +102,11 @@ export class VeewerClient {
     });
   }
 
+  /** No body either way: the backend answers 204 (delete_model, 23002-1148). */
+  async delete(path: string): Promise<void> {
+    await this.send<undefined>(new URL(this.baseUrl + path), { method: "DELETE" });
+  }
+
   /**
    * One place for the credential, the deadline and the error mapping, so a read and a write
    * fail in exactly the same words.

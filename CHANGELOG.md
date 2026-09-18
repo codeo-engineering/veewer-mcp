@@ -14,6 +14,21 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-18
+
+### Added
+
+- `delete_model(modelId)`: permanently deletes a model (source file, viewer and AR files, share
+  link, view count). Calls `DELETE /models/{id}`; `readOnlyHint: false`, `destructiveHint: true`,
+  `idempotentHint: true` (a second call on the same id answers "not found"). Registered only for
+  an OAuth grant that carries `models:delete` -- its own consent box, so a connection allowed to
+  rename cannot delete; API keys always see it and a key without the "Delete your models"
+  permission gets the backend's 403 message. No `confirm` argument by design: the safeguard is
+  the granted scope plus the destructive hint, not a field the model fills in. Needs backend
+  23002-1148.
+- `VeewerClient.delete` (no body in, no body out), sharing the deadline and error mapping with
+  `get` and `patch`.
+
 ## [0.7.0] - 2026-09-17
 
 ### Added
@@ -174,7 +189,11 @@ Versioning rules for this repository:
 - Upload, rename and delete are deliberately absent in this version: uploading spends account
   credits and deleting cannot be undone, neither of which belongs in an agent's hands yet.
 
-[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.2.0...v0.2.1

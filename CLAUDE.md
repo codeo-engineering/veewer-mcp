@@ -47,7 +47,7 @@ writing them, precisely so the shared layer stays silent for the transport that 
 
 ```
 src/client.ts   # HTTP client, the response types the API returns, the Node version check
-src/tools.ts    # the eight tools and the server factory -- shared by both entry points
+src/tools.ts    # the eleven tools and the server factory -- shared by both entry points
 src/stdio.ts    # stdio entry point: one account, key from the environment (bin/main point here)
 src/http.ts     # HTTP entry point: many accounts, credential from each request
 src/oauth.ts    # OAuth resource-server side: metadata, challenge header, JWKS token verification
@@ -187,9 +187,9 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   forwarded before that check. The verified token then goes to the public API as
   `Authorization: Bearer`; `VeewerClient` takes either `apiKey` or `accessToken`.
 - `x-api-key` still works and wins when both are present.
-- Every tool carries `annotations: readOnly` (`readOnlyHint`, `destructiveHint:false`,
-  `idempotentHint`, `openWorldHint:false`) — the Connectors Directory review rejects tools
-  without them.
+- Every tool carries one of the three annotation sets in `tools.ts` (`readOnly`,
+  `reversibleWrite`, `destructiveWrite`; all four hints set, `openWorldHint:false`) — the
+  Connectors Directory review rejects tools without them.
 - Local e2e recipe: backend on 5057 as `Environment.DEV` (the issuer is derived from
   `BackEndUrl`, so `PRODUCTION_DEV` would mint `iss=https://veewerdev…` and fail here) with
   `OAuth__Enabled=true`, `OAuth__SigningKeyPem=<pem>`, `OAuth__Resources__1=http://localhost:3001/mcp`;
@@ -239,3 +239,11 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   `destructiveHint: true` for delete); registering a write with the `readOnly` annotations would
   make Claude skip its confirmation step. Against a backend that predates the endpoint the tool
   is listed and answers a 404 tool error — harmless, so the deploy order is backend → MCP.
+- **`delete_model` (23002-1148) has no `confirm` argument, and must not grow one.** A field the
+  model fills in itself is not a safeguard; the safeguards are the separate `models:delete`
+  scope (its own box on the consent page and the key form, so a connection that may rename cannot
+  delete) and `destructiveHint: true`, which makes Claude ask before the call. `idempotentHint`
+  stays true: a second call on the same id answers 404 and removes nothing further. The backend
+  answers 204, so `client.delete` returns nothing and the tool builds its own `{deleted, modelId}`
+  text; a storage failure on the backend keeps the model and answers 500 with a "try again"
+  sentence, which the client passes through as the tool error.
