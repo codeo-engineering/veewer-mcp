@@ -102,6 +102,15 @@ export class VeewerClient {
     });
   }
 
+  /** JSON in, JSON out, for creating things (upload_model, 23002-1149): the backend answers 202. */
+  async post<T>(path: string, body: unknown): Promise<T> {
+    return this.send<T>(new URL(this.baseUrl + path), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
   /** No body either way: the backend answers 204 (delete_model, 23002-1148). */
   async delete(path: string): Promise<void> {
     await this.send<undefined>(new URL(this.baseUrl + path), { method: "DELETE" });
@@ -235,4 +244,14 @@ export interface VeewerAccount {
 export interface VeewerCreditCost {
   format: string;
   credits: number;
+}
+
+/** An upload started from a URL (23002-1149); "completed" means the model exists and its conversion has begun. */
+export interface VeewerUploadJob {
+  id: string;
+  status: "queued" | "downloading" | "uploading" | "completed" | "failed";
+  modelId: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

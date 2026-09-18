@@ -29,6 +29,7 @@ import {
   VeewerFolder,
   VeewerModel,
   VeewerModelList,
+  VeewerUploadJob,
 } from "./client.js";
 
 export const SERVER_NAME = "veewer";
@@ -88,6 +89,10 @@ const listInput = {
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const reversibleWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const destructiveWrite = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } as const;
+// upload_model (23002-1149): every call creates a new model and spends credits, so not idempotent;
+// and the backend fetches whatever public URL the caller names, so this is the one tool that
+// reaches beyond VEEWER (`openWorldHint: true`).
+const creatingWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true } as const;
 
 export function createVeewerServer(client: VeewerClient, options: ServerOptions = {}): McpServer {
   const server = new McpServer({
@@ -247,6 +252,62 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         await client.delete(`/models/${encodeURIComponent(modelId)}`);
         return { deleted: true, modelId };
       }),
+  ));
+
+  // Upload (23002-1149). The file is not in the call: the backend downloads the URL itself,
+  // asynchronously -- a POST that downloaded, uploaded and converted in one request would be cut
+  // by the edge (100 s on prod) long before a real model finished. So the tool returns an upload
+  // id and the agent polls get_upload_status. Credits are spent when the conversion starts, not
+  // when this tool answers; a refused upload spends none.
+  whenGranted(SCOPE_WRITE, () => server.registerTool(
+    "upload_model",
+    {
+      title: "Upload a model from a URL",
+      description:
+        "Start uploading a 3D model into VEEWER from a public https URL that ends with the file name and its extension " +
+        "(for example https://example.com/models/house.rvt). VEEWER downloads the file itself; the call returns at once " +
+        "with an upload id and status \"queued\". Poll get_upload_status every 10 seconds or so until the status is " +
+        "\"completed\" (then follow the new model with get_model: its status goes processing -> active) or \"failed\" " +
+        "(failureReason says why). An upload SPENDS CREDITS according to the file format (see get_account creditCosts); " +
+        "check the balance first and confirm with the user before uploading. Addresses on private networks are refused; " +
+        "single files only (a zip archive is refused). Needs the \"Change your models\" permission on the API key or connection.",
+      annotations: creatingWrite,
+      inputSchema: {
+        sourceUrl: z
+          .string()
+          .url()
+          .describe("The https address of the file, ending with its name and extension. Must be reachable from the public internet."),
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Display name for the new model; the file name is used when left out."),
+        folderId: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("The folder id from list_folders to put the model in; leave out for the top level."),
+      },
+    },
+    async ({ sourceUrl, name, folderId }) =>
+      respond("upload_model", () => client.post<VeewerUploadJob>("/models", { sourceUrl, name, folderId })),
+  ));
+
+  whenGranted(SCOPE_READ, () => server.registerTool(
+    "get_upload_status",
+    {
+      title: "Get upload status",
+      description:
+        "Read the state of an upload started with upload_model: queued, downloading, uploading, completed (modelId is " +
+        "set; use get_model for the conversion) or failed (failureReason; if modelId is set too, a refused model record " +
+        "exists and can be deleted). Poll every 10 seconds or so; a large file can take minutes.",
+      annotations: readOnly,
+      inputSchema: { uploadId: z.string().min(1).describe("The id returned by upload_model.") },
+    },
+    async ({ uploadId }) =>
+      respond("get_upload_status", () => client.get<VeewerUploadJob>(`/uploads/${encodeURIComponent(uploadId)}`)),
   ));
 
   whenGranted(SCOPE_READ, () => server.registerTool(

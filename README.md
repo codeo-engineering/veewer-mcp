@@ -1,12 +1,13 @@
 # @veewer/mcp
 
 MCP server for [VEEWER](https://veewer.com). It lets an AI assistant read the 3D models in your
-VEEWER account, hand you the embed code or share link for any of them, and rename, move or delete
-them — without you opening the site.
+VEEWER account, hand you the embed code or share link for any of them, upload a new model from a
+URL, and rename, move or delete them — without you opening the site.
 
 A key or connection only does what you allowed it to: reading is always on, **"Change your
-models"** unlocks `rename_model` and `move_model`, **"Delete your models"** unlocks `delete_model`
-(a separate permission, because a deletion cannot be undone), and nothing here can upload yet.
+models"** unlocks `rename_model`, `move_model` and `upload_model` (an upload spends your credits),
+and **"Delete your models"** unlocks `delete_model` (a separate permission, because a deletion
+cannot be undone).
 
 Needs **Node.js 18 or newer** (20 LTS or newer recommended). On an older Node the server starts
 but every call fails, so it refuses to start instead and says why.
@@ -49,6 +50,8 @@ for the armchair model"*.
 | `get_account` | Plan, remaining credits, storage in use and the credit cost of one upload per format |
 | `rename_model` | Change a model's display name (needs the "Change your models" permission) |
 | `move_model` | Move a model into a folder, or to the top level (same permission) |
+| `upload_model` | Upload a new model from a public https URL; spends credits, runs in the background (needs "Change your models") |
+| `get_upload_status` | Follow an upload started with `upload_model` until the model exists |
 | `delete_model` | Permanently delete a model and its files (needs the "Delete your models" permission) |
 
 ## Configuration

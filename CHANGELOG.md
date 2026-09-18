@@ -14,6 +14,22 @@ Versioning rules for this repository:
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-18
+
+### Added
+
+- `upload_model(sourceUrl, name?, folderId?)`: the last write tool of 23002-1142. The file is
+  not in the call -- the backend downloads the public https URL itself, in the background --
+  so the tool answers at once with an upload id and `status: "queued"`; `POST /models`
+  answers 202. `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false` (every
+  call creates a model and spends credits), `openWorldHint: true` (the backend reaches the
+  host the caller named). Registered only for a grant that carries `models:write`; API keys
+  always see it. Needs backend 23002-1149.
+- `get_upload_status(uploadId)`: read-only; `queued | downloading | uploading | completed |
+  failed`. `completed` carries the new model's id, whose conversion is then followed with
+  `get_model`.
+- `VeewerClient.post` (JSON in, JSON out) beside `get`, `patch` and `delete`.
+
 ## [0.8.0] - 2026-09-18
 
 ### Added
@@ -189,7 +205,8 @@ Versioning rules for this repository:
 - Upload, rename and delete are deliberately absent in this version: uploading spends account
   credits and deleting cannot be undone, neither of which belongs in an agent's hands yet.
 
-[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/codeo-engineering/veewer-mcp/compare/v0.5.0...v0.6.0

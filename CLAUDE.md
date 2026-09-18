@@ -47,7 +47,7 @@ writing them, precisely so the shared layer stays silent for the transport that 
 
 ```
 src/client.ts   # HTTP client, the response types the API returns, the Node version check
-src/tools.ts    # the eleven tools and the server factory -- shared by both entry points
+src/tools.ts    # the thirteen tools and the server factory -- shared by both entry points
 src/stdio.ts    # stdio entry point: one account, key from the environment (bin/main point here)
 src/http.ts     # HTTP entry point: many accounts, credential from each request
 src/oauth.ts    # OAuth resource-server side: metadata, challenge header, JWKS token verification
@@ -187,9 +187,10 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   forwarded before that check. The verified token then goes to the public API as
   `Authorization: Bearer`; `VeewerClient` takes either `apiKey` or `accessToken`.
 - `x-api-key` still works and wins when both are present.
-- Every tool carries one of the three annotation sets in `tools.ts` (`readOnly`,
-  `reversibleWrite`, `destructiveWrite`; all four hints set, `openWorldHint:false`) — the
-  Connectors Directory review rejects tools without them.
+- Every tool carries one of the four annotation sets in `tools.ts` (`readOnly`,
+  `reversibleWrite`, `destructiveWrite`, `creatingWrite`; all four hints set; only
+  `upload_model` is `openWorldHint:true`, because the backend fetches the host the caller named)
+  — the Connectors Directory review rejects tools without them.
 - Local e2e recipe: backend on 5057 as `Environment.DEV` (the issuer is derived from
   `BackEndUrl`, so `PRODUCTION_DEV` would mint `iss=https://veewerdev…` and fail here) with
   `OAuth__Enabled=true`, `OAuth__SigningKeyPem=<pem>`, `OAuth__Resources__1=http://localhost:3001/mcp`;
@@ -247,3 +248,14 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   answers 204, so `client.delete` returns nothing and the tool builds its own `{deleted, modelId}`
   text; a storage failure on the backend keeps the model and answers 500 with a "try again"
   sentence, which the client passes through as the tool error.
+- **`upload_model` (23002-1149) never carries the file and never waits for it.** The backend
+  downloads the URL in a background job and `POST /models` answers 202 with an upload id, because
+  a synchronous download+upload+convert would be cut by the edge (Cloudflare 100 s on prod, App
+  Service 230 s on dev) for any real model. The tool therefore returns `status: "queued"` and the
+  agent polls `get_upload_status`; `completed` means the model row exists and conversion has
+  started — the conversion itself is followed with `get_model`. The tool description tells the
+  model to check `get_account` and confirm with the user first: credits are spent when the
+  conversion starts and a refused upload spends none. The backend validates the URL (https only,
+  public address after DNS resolution, redirects re-checked) and answers 400 with a plain-words
+  reason; the tool passes it through. Do not add a `waitForCompletion` flag: a hosted request
+  that blocks for minutes is exactly what the async design exists to avoid.
