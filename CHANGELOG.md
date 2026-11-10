@@ -15,6 +15,21 @@ Versioning rules for this repository (live since 1.0.0):
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-10
+
+### Changed
+
+- Upload credits now depend on the file size (backend 23002-1166, from 2026-12-08): every
+  `creditCosts` entry from `get_account` carries `largeFileCredits` and `largeFileFromBytes`
+  beside `credits`. `get_account` tells the agent to pick the cost by file size, to count with
+  `largeFileCredits` when the size is unknown (a worst-case count that is never too high), and
+  that a null `largeFileFromBytes` means the format always costs `largeFileCredits`.
+  `upload_model` says the size is measured after the download and asks the agent to confirm the
+  cost with the user. The thresholds are not written into the descriptions: the backend owns
+  them and returns them in the data. Additive fields only, hence a minor bump. Publish after the
+  backend release that carries 23002-1166; against an older backend the new fields are simply
+  absent.
+
 ## [1.0.0] - 2026-09-18
 
 ### Changed

@@ -268,8 +268,10 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         "(for example https://example.com/models/house.rvt). VEEWER downloads the file itself; the call returns at once " +
         "with an upload id and status \"queued\". Poll get_upload_status every 10 seconds or so until the status is " +
         "\"completed\" (then follow the new model with get_model: its status goes processing -> active) or \"failed\" " +
-        "(failureReason says why). An upload SPENDS CREDITS according to the file format (see get_account creditCosts); " +
-        "check the balance first and confirm with the user before uploading. Addresses on private networks are refused; " +
+        "(failureReason says why). An upload SPENDS CREDITS according to the file format and the file size, which VEEWER " +
+        "measures after the download (see get_account creditCosts: credits below largeFileFromBytes, largeFileCredits at " +
+        "or above it); if the size is unknown, assume largeFileCredits. Check the balance first and confirm the cost with " +
+        "the user before uploading. Addresses on private networks are refused; " +
         "single files only (a zip archive is refused). Needs the \"Change your models\" permission on the API key or connection.",
       annotations: creatingWrite,
       inputSchema: {
@@ -380,10 +382,14 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       title: "Get account summary",
       description:
         "Read the user's VEEWER plan, remaining credits, storage in use and the credit cost of one upload " +
-        "per file format (creditCosts). To answer how many more models can be uploaded: divide " +
-        "availableCredit by the credits of the format in question and round DOWN to whole models; never " +
-        "report a fraction of a model, and if availableCredit is below the format's cost say that format " +
-        "cannot be uploaded yet. Name the format beside every count. Storage is a second, separate " +
+        "per file format (creditCosts). The cost depends on the file size: a file smaller than " +
+        "largeFileFromBytes costs credits, a file at or above it costs largeFileCredits, and a null " +
+        "largeFileFromBytes means every file of that format costs largeFileCredits. To answer how many more " +
+        "models can be uploaded: divide availableCredit by the cost for that format and file size and round " +
+        "DOWN to whole models; never report a fraction of a model. When the file size is not known, count " +
+        "with largeFileCredits (the worst case) and say the number may be higher for smaller files. If " +
+        "availableCredit is below the cost, say that file cannot be uploaded yet. Name the format beside " +
+        "every count. Storage is a second, separate " +
         "ceiling (usedStorageBytes against totalStorageBytes); a null totalStorageBytes means the quota is " +
         "unknown, not unlimited. usedStorageBytes already sums every model, and each model's own footprint is " +
         "its storageBytes; the storage a file not yet uploaded will take cannot be predicted from either — " +

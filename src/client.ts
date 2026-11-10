@@ -243,7 +243,12 @@ export interface VeewerAccount {
 
 export interface VeewerCreditCost {
   format: string;
+  /** Credits for one upload of a file smaller than largeFileFromBytes. */
   credits: number;
+  /** Credits for one upload of a file at or above largeFileFromBytes (backend 23002-1166). */
+  largeFileCredits: number;
+  /** Size from which largeFileCredits applies; null means every file of this format costs largeFileCredits. */
+  largeFileFromBytes: number | null;
 }
 
 /** An upload started from a URL (23002-1149); "completed" means the model exists and its conversion has begun. */

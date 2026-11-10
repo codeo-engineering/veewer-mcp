@@ -47,7 +47,7 @@ for the armchair model"*.
 | `get_embed_code` | A ready-to-paste `<iframe>` for a model |
 | `get_share_link` | The shareable link (and the AR link when the model has one) |
 | `get_viewer_url` | The viewer URL an iframe would point at |
-| `get_account` | Plan, remaining credits, storage in use and the credit cost of one upload per format |
+| `get_account` | Plan, remaining credits, storage in use and the credit cost of one upload per format, including the higher cost for large files |
 | `rename_model` | Change a model's display name (needs the "Change your models" permission) |
 | `move_model` | Move a model into a folder, or to the top level (same permission) |
 | `upload_model` | Upload a new model from a public https URL; spends credits, runs in the background (needs "Change your models") |
