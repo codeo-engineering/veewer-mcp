@@ -251,6 +251,60 @@ export interface VeewerCreditCost {
   largeFileFromBytes: number | null;
 }
 
+/**
+ * One share link of a model (backend 23002-1202, PublicShareLinkDto). A model can have several:
+ * the default one (share button, embed code) plus labelled ones created for individual recipients.
+ */
+export interface VeewerShareLink {
+  /** Public token, the last part of url; visits name their link by it. */
+  token: string;
+  url: string;
+  /** null when the model has no AR version. */
+  arUrl: string | null;
+  label: string | null;
+  isDefault: boolean;
+  /** ISO 8601 UTC; null = never expires. */
+  expiresAt: string | null;
+  /** ISO 8601 UTC; null while live. A revoked link no longer opens. */
+  revokedAt: string | null;
+  /** Opens of the viewer or AR page through this link, owner's own opens and link checkers included. */
+  viewCount: number;
+  lastViewedAt: string | null;
+}
+
+/** One page load through a share link (backend 23002-1202, PublicVisitDto). */
+export interface VeewerVisit {
+  token: string;
+  modelId: string;
+  label: string | null;
+  visitId: string;
+  viewerId: string;
+  page: "viewer" | "ar";
+  /** yyyy-MM-dd, UTC. */
+  day: string;
+  firstSeen: string;
+  lastSeen: string;
+  mobile: boolean;
+  embedded: boolean;
+  lang: string | null;
+  /** null when the model never finished loading (typical of link checkers). */
+  loadedMs: number | null;
+  activeMs: number;
+  orbit: number;
+  zoom: number;
+  tools: number;
+  views: number;
+  ar: number;
+  arStarted: boolean;
+  fromQr: boolean;
+  internal: boolean;
+}
+
+export interface VeewerVisitList {
+  items: VeewerVisit[];
+  nextCursor: string | null;
+}
+
 /** An upload started from a URL (23002-1149); "completed" means the model exists and its conversion has begun. */
 export interface VeewerUploadJob {
   id: string;

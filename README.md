@@ -5,7 +5,7 @@ VEEWER account, hand you the embed code or share link for any of them, upload a 
 URL, and rename, move or delete them — without you opening the site.
 
 A key or connection only does what you allowed it to: reading is always on, **"Change your
-models"** unlocks `rename_model`, `move_model` and `upload_model` (an upload spends your credits),
+models"** unlocks `rename_model`, `move_model`, `create_share_link` and `upload_model` (an upload spends your credits),
 and **"Delete your models"** unlocks `delete_model` (a separate permission, because a deletion
 cannot be undone).
 
@@ -47,6 +47,9 @@ for the armchair model"*.
 | `get_embed_code` | A ready-to-paste `<iframe>` for a model |
 | `get_share_link` | The shareable link (and the AR link when the model has one) |
 | `get_viewer_url` | The viewer URL an iframe would point at |
+| `list_share_links` | Every share link of a model: default and labelled ones, expiry, revocation, view count |
+| `create_share_link` | A new labelled share link for a model, e.g. one per recipient (needs "Change your models") |
+| `list_visits` | What happened on your share links: one row per page load, with interaction counts (only for accounts with visit tracking on) |
 | `get_account` | Plan, remaining credits, storage in use and the credit cost of one upload per format, including the higher cost for large files |
 | `rename_model` | Change a model's display name (needs the "Change your models" permission) |
 | `move_model` | Move a model into a folder, or to the top level (same permission) |

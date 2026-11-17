@@ -29,7 +29,9 @@ import {
   VeewerFolder,
   VeewerModel,
   VeewerModelList,
+  VeewerShareLink,
   VeewerUploadJob,
+  VeewerVisitList,
 } from "./client.js";
 
 export const SERVER_NAME = "veewer";
@@ -93,6 +95,9 @@ const destructiveWrite = { readOnlyHint: false, destructiveHint: true, idempoten
 // and the backend fetches whatever public URL the caller names, so this is the one tool that
 // reaches beyond VEEWER (`openWorldHint: true`).
 const creatingWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true } as const;
+// create_share_link (23002-1206): every call adds one more link, so not idempotent; nothing is
+// overwritten and VEEWER talks to no other host, so additive and closed-world.
+const additiveWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const;
 
 export function createVeewerServer(client: VeewerClient, options: ServerOptions = {}): McpServer {
   const server = new McpServer({
@@ -359,6 +364,118 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
         const embed = await client.get<VeewerEmbed>(`/models/${encodeURIComponent(modelId)}/embed`);
         return { modelId: embed.modelId, shareUrl: embed.shareUrl, arUrl: embed.arUrl };
       }),
+  ));
+
+  // Share links and their visits (23002-1206, backend 23002-1202). get_share_link above answers
+  // "the" link -- the default one; these three are for the several-links-per-model case: one
+  // labelled link per recipient, and the visits that come back through each. Against a backend
+  // that predates the endpoints they answer a 404 tool error, so the deploy order is backend -> MCP.
+  whenGranted(SCOPE_READ, () => server.registerTool(
+    "list_share_links",
+    {
+      title: "List share links",
+      description:
+        "List every share link of one VEEWER model, the default one and any labelled links created for individual " +
+        "recipients. Each link has its public token (the last part of url; visits name their link by it), url (viewer " +
+        "page), arUrl (AR page, null when the model has no AR version), label (null for an unnamed link), isDefault " +
+        "(the link the share button and the embed code use; get_share_link returns this one), expiresAt (null = never " +
+        "expires), revokedAt (null while live; a revoked link no longer opens), viewCount and lastViewedAt. viewCount " +
+        "counts every open, including the owner's own and automated link checkers in mail systems, so it is not the " +
+        "number of people; use list_visits for what visitors actually did. Dates are ISO 8601 UTC.",
+      annotations: readOnly,
+      inputSchema: { modelId: z.string().min(1).describe("The model id.") },
+    },
+    async ({ modelId }) =>
+      respond("list_share_links", () =>
+        client.get<VeewerShareLink[]>(`/models/${encodeURIComponent(modelId)}/share-links`),
+      ),
+  ));
+
+  whenGranted(SCOPE_WRITE, () => server.registerTool(
+    "create_share_link",
+    {
+      title: "Create a share link",
+      description:
+        "Create one more share link for a VEEWER model, usually one per recipient, so the visits made through it can " +
+        "be told apart (list_visits returns the link's token and label on every visit). Returns the new link as " +
+        "list_share_links shows it: send its url (or arUrl for the AR page). The model's default link and the embed " +
+        "code do not change. Every call creates a new link, so reuse a link from list_share_links when one with the " +
+        "same label already exists. A model can have at most 20 links that are not revoked; an expiry in the past, a " +
+        "bad label or the limit is refused with a plain-words reason. Needs the \"Change your models\" permission on " +
+        "the API key or connection.",
+      annotations: additiveWrite,
+      inputSchema: {
+        modelId: z.string().min(1).describe("The model id."),
+        label: z
+          .string()
+          .trim()
+          .max(100)
+          .optional()
+          .describe(
+            "A name for the link, for example the recipient's name or company; it comes back on every visit made " +
+              "through the link. At most 100 characters, no line breaks; surrounding spaces are removed. Leave out " +
+              "for an unnamed link.",
+          ),
+        expiresAt: z
+          .string()
+          .datetime({ offset: true })
+          .optional()
+          .describe(
+            "When the link should stop working, ISO 8601 (for example 2027-01-31T23:59:59Z). Must be in the future; " +
+              "leave out for a link that never expires.",
+          ),
+      },
+    },
+    async ({ modelId, label, expiresAt }) =>
+      respond("create_share_link", () =>
+        client.post<VeewerShareLink>(`/models/${encodeURIComponent(modelId)}/share-links`, { label, expiresAt }),
+      ),
+  ));
+
+  whenGranted(SCOPE_READ, () => server.registerTool(
+    "list_visits",
+    {
+      title: "List share link visits",
+      description:
+        "List the visits made through the user's VEEWER share links, across all models, most recently active first. " +
+        "A visit is one page load of the viewer page (page \"viewer\", also when embedded in another site) or the AR " +
+        "page (page \"ar\"); it names its link by token and label and its model by modelId. Visits are recorded only " +
+        "for accounts that have visit tracking switched on, and only from then on: an empty list may mean tracking is " +
+        "off, not that nobody looked. The user's own visits (signed in, a browser marked with ?internal=1, automated " +
+        "test browsers) are left out unless includeInternal is true. How to read a visit: activeMs counts only time " +
+        "with real mouse, keyboard or touch input, so activeMs 0 with loadedMs null is typically an automated link " +
+        "checker in a mail system, not a person; orbit, zoom, tools (measure, section, explode, walk) and views " +
+        "(switching 3D/2D views) count interactions; ar counts AR button presses and arStarted says whether AR " +
+        "actually started on the phone; fromQr means the AR page was opened by scanning the QR code on the desktop " +
+        "viewer, so it is the same person on a second device. Several visits with the same viewerId are one browser " +
+        "tab reloading or moving between pages, not several people. Times are ISO 8601 UTC, day is the UTC date. " +
+        "Paged: pass the returned nextCursor to continue.",
+      annotations: readOnly,
+      inputSchema: {
+        days: z
+          .number()
+          .int()
+          .min(1)
+          .max(180)
+          .optional()
+          .describe("How many days back to look (default 60, at most 180; older visits are not kept)."),
+        includeInternal: z
+          .boolean()
+          .optional()
+          .describe("Also return the user's own visits (internal: true). Default false."),
+        limit: z.number().int().min(1).max(1000).optional().describe("How many visits to return (default 500)."),
+        cursor: z.string().optional().describe("Pass the nextCursor from a previous call to get the next page."),
+      },
+    },
+    async ({ days, includeInternal, limit, cursor }) =>
+      respond("list_visits", () =>
+        client.get<VeewerVisitList>("/visits", {
+          days,
+          includeInternal: includeInternal === undefined ? undefined : String(includeInternal),
+          limit,
+          cursor,
+        }),
+      ),
   ));
 
   whenGranted(SCOPE_READ, () => server.registerTool(

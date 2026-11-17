@@ -47,7 +47,7 @@ writing them, precisely so the shared layer stays silent for the transport that 
 
 ```
 src/client.ts   # HTTP client, the response types the API returns, the Node version check
-src/tools.ts    # the thirteen tools and the server factory -- shared by both entry points
+src/tools.ts    # the sixteen tools and the server factory -- shared by both entry points
 src/stdio.ts    # stdio entry point: one account, key from the environment (bin/main point here)
 src/http.ts     # HTTP entry point: many accounts, credential from each request
 src/oauth.ts    # OAuth resource-server side: metadata, challenge header, JWKS token verification
@@ -190,8 +190,9 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   forwarded before that check. The verified token then goes to the public API as
   `Authorization: Bearer`; `VeewerClient` takes either `apiKey` or `accessToken`.
 - `x-api-key` still works and wins when both are present.
-- Every tool carries one of the four annotation sets in `tools.ts` (`readOnly`,
-  `reversibleWrite`, `destructiveWrite`, `creatingWrite`; all four hints set; only
+- Every tool carries one of the five annotation sets in `tools.ts` (`readOnly`,
+  `reversibleWrite`, `destructiveWrite`, `creatingWrite`, `additiveWrite` -- the last for
+  `create_share_link`, 23002-1206: not idempotent, closed-world; all four hints set; only
   `upload_model` is `openWorldHint:true`, because the backend fetches the host the caller named)
   — the Connectors Directory review rejects tools without them.
 - Local e2e recipe: backend on 5057 as `Environment.DEV` (the issuer is derived from

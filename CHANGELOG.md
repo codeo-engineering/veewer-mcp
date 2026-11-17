@@ -15,6 +15,28 @@ Versioning rules for this repository (live since 1.0.0):
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-17
+
+### Added
+
+- Share links and visits (23002-1206). **Requires the backend release that carries 23002-1202**
+  (`GET`/`POST /models/{id}/share-links`, `GET /visits`); against an older backend the three
+  tools are listed and answer a 404 tool error, so publish after that backend deploy.
+  - `list_share_links(modelId)`: every link of a model -- the default one and labelled ones --
+    with token, url, arUrl, label, isDefault, expiresAt, revokedAt, viewCount, lastViewedAt. The
+    description warns that viewCount includes the owner and mail link checkers.
+  - `create_share_link(modelId, label?, expiresAt?)`: one more link, typically one per
+    recipient, behind `models:write` (registered through `whenGranted(SCOPE_WRITE, …)`). A new
+    annotation set `additiveWrite` (not idempotent: every call adds a link; closed-world). The
+    backend's 400 reasons (past expiry, more than 20 live links, bad label) pass through.
+  - `list_visits(days?, includeInternal?, limit?, cursor?)`: one row per page load of the viewer
+    or AR page across all the user's links, newest activity first, paged. The description tells
+    the agent that visits exist only for accounts with visit tracking on (an empty list may mean
+    tracking is off), that the user's own visits are left out by default, and how to read
+    activeMs/loadedMs (a link checker shows 0/null), the interaction counters, arStarted, fromQr
+    and viewerId.
+- New tools, no changed contract, hence a minor bump.
+
 ## [1.1.0] - 2026-11-10
 
 ### Changed
