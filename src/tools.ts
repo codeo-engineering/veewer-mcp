@@ -330,6 +330,82 @@ export function createVeewerServer(client: VeewerClient, options: ServerOptions 
       respond("list_folders", () => client.get<VeewerFolder[]>("/folders", { parentId })),
   ));
 
+  // Folder writes (23002-1219). The backend owns every rule -- name rules, the plan gate, the
+  // parent's owner, and that the hidden root container can be neither renamed nor deleted; these
+  // registrations only mirror the name limit so an obviously bad call never leaves the process.
+  const folderName = z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .describe("The folder name: 1 to 100 characters, no line breaks; surrounding spaces are removed.");
+
+  whenGranted(SCOPE_WRITE, () => server.registerTool(
+    "create_folder",
+    {
+      title: "Create a folder",
+      description:
+        "Create a VEEWER folder at the top level or inside another folder and return it as list_folders shows it; " +
+        "its id can go straight into upload_model or move_model. Folder names do not have to be unique and every " +
+        "call creates a new folder, so check list_folders first and reuse a folder that already has the name. " +
+        "Folders are not included in every plan; a plan without them is refused with a plain-words reason. " +
+        "Needs the \"Change your models\" permission on the API key or connection.",
+      annotations: additiveWrite,
+      inputSchema: {
+        name: folderName,
+        parentId: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("The folder id from list_folders to create the new folder in; leave out for the top level."),
+      },
+    },
+    async ({ name, parentId }) =>
+      respond("create_folder", () => client.post<VeewerFolder>("/folders", { name, parentId })),
+  ));
+
+  whenGranted(SCOPE_WRITE, () => server.registerTool(
+    "rename_folder",
+    {
+      title: "Rename a folder",
+      description:
+        "Change the name of one VEEWER folder and return it as list_folders shows it. The models and subfolders " +
+        "inside are untouched. Sending the current name changes nothing. Needs the \"Change your models\" " +
+        "permission on the API key or connection.",
+      annotations: reversibleWrite,
+      inputSchema: {
+        folderId: z.string().min(1).describe("The folder id from list_folders."),
+        name: folderName,
+      },
+    },
+    async ({ folderId, name }) =>
+      respond("rename_folder", () => client.patch<VeewerFolder>(`/folders/${encodeURIComponent(folderId)}`, { name })),
+  ));
+
+  // Destructive and recursive, hence its own scope and destructiveHint -- the same reasoning as
+  // delete_model, and likewise no `confirm` argument: a field the model fills in is no safeguard.
+  whenGranted(SCOPE_DELETE, () => server.registerTool(
+    "delete_folder",
+    {
+      title: "Delete a folder and everything in it",
+      description:
+        "Permanently delete one VEEWER folder TOGETHER WITH EVERYTHING INSIDE IT: every subfolder, at any depth, " +
+        "and every model in them (uploaded files, viewer and AR files, share links and view counts). Nothing can be " +
+        "recovered. Before calling, use list_folders (with parentId) and list_models (with folderId) to see what the " +
+        "folder holds and tell the user; to keep a model, move it out with move_model first. Needs the \"Delete your " +
+        "models\" permission on the API key or connection.",
+      annotations: destructiveWrite,
+      inputSchema: {
+        folderId: z.string().min(1).describe("The id of the folder to delete, from list_folders."),
+      },
+    },
+    async ({ folderId }) =>
+      respond("delete_folder", async () => {
+        await client.delete(`/folders/${encodeURIComponent(folderId)}`);
+        return { deleted: true, folderId };
+      }),
+  ));
+
   // The three tools below call one endpoint. They are separate because of the user, not the model:
   // "give me the embed code", "give me a share link" and "the viewer address" are separate
   // intents, and expecting the caller to pick the right field out of one three-field JSON is a

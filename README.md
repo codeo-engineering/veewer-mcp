@@ -44,6 +44,9 @@ for the armchair model"*.
 | `search_models` | Models whose name contains some text |
 | `get_model` | One model: status, failure reason, format, storage taken, AR availability, view count |
 | `list_folders` | Your folders |
+| `create_folder` | A new folder, at the top level or inside another folder (needs "Change your models") |
+| `rename_folder` | Change a folder's name (same permission) |
+| `delete_folder` | Permanently delete a folder with every subfolder and model inside it (needs "Delete your models") |
 | `get_embed_code` | A ready-to-paste `<iframe>` for a model |
 | `get_share_link` | The shareable link (and the AR link when the model has one) |
 | `get_viewer_url` | The viewer URL an iframe would point at |

@@ -15,6 +15,26 @@ Versioning rules for this repository (live since 1.0.0):
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-18
+
+### Added
+
+- Folder writes (23002-1219). **Requires the backend release that carries 23002-1219**
+  (`POST /folders`, `PATCH`/`DELETE /folders/{id}`); against an older backend the three tools are
+  listed and answer a 404 tool error, so publish after that backend deploy.
+  - `create_folder(name, parentId?)`: behind `models:write`, `additiveWrite` (every call creates a
+    folder). Returns the folder as `list_folders` shows it, so its id can go straight into
+    `upload_model` / `move_model`. The description tells the agent to reuse an existing folder of
+    the same name. A plan without folders is refused by the backend with a plain-words 403.
+  - `rename_folder(folderId, name)`: behind `models:write`, `reversibleWrite`.
+  - `delete_folder(folderId)`: behind `models:delete`, `destructiveWrite`. Deletes the folder
+    **with every subfolder and model inside it** (the same behaviour as the website); the
+    description tells the agent to look inside and tell the user first. No `confirm` argument,
+    for the same reason as `delete_model`.
+  - Names are 1 to 100 characters, no line breaks; the backend's `FolderNameRules` is the rule,
+    the schema only mirrors it. The hidden root container never resolves (404).
+- New tools, no changed contract, hence a minor bump.
+
 ## [1.2.0] - 2026-11-17
 
 ### Added

@@ -47,7 +47,7 @@ writing them, precisely so the shared layer stays silent for the transport that 
 
 ```
 src/client.ts   # HTTP client, the response types the API returns, the Node version check
-src/tools.ts    # the sixteen tools and the server factory -- shared by both entry points
+src/tools.ts    # the nineteen tools and the server factory -- shared by both entry points
 src/stdio.ts    # stdio entry point: one account, key from the environment (bin/main point here)
 src/http.ts     # HTTP entry point: many accounts, credential from each request
 src/oauth.ts    # OAuth resource-server side: metadata, challenge header, JWKS token verification
@@ -263,3 +263,10 @@ measured Claude requirements: VEEWER-Backend `docs/MCP-OAuth-Design-23002-1140.m
   public address after DNS resolution, redirects re-checked) and answers 400 with a plain-words
   reason; the tool passes it through. Do not add a `waitForCompletion` flag: a hosted request
   that blocks for minutes is exactly what the async design exists to avoid.
+- **`delete_folder` (23002-1219) is recursive**: it removes every subfolder and every model in
+  them, exactly like the website's folder delete (owner decision) — hence `models:delete` and
+  `destructiveHint`, and a description that tells the agent to look inside first. It is the only
+  tool that can delete many models in one call. `create_folder` is `additiveWrite` (names are not
+  unique; every call adds a folder) and `rename_folder` is `reversibleWrite`. The hidden root
+  container never resolves through these endpoints (404), so an agent cannot empty a library by
+  deleting "the top level". The name limit (100) mirrors the backend's `FolderNameRules`.
